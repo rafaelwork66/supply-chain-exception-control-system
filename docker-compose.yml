@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: scecs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: scecs_dev
+      POSTGRES_USER: scecs_user
+      POSTGRES_PASSWORD: scecs_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scecs_user -d scecs_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+

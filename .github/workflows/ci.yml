@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    name: Lint, type check, and test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: scecs_test
+          POSTGRES_USER: scecs_user
+          POSTGRES_PASSWORD: scecs_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scecs_user -d scecs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SCECS_ENVIRONMENT: test
+      SCECS_LOG_LEVEL: INFO
+      SCECS_APP_NAME: Supply Chain Exception Control System
+      SCECS_DB_HOST: localhost
+      SCECS_DB_PORT: "5432"
+      SCECS_DB_NAME: scecs_test
+      SCECS_DB_USER: scecs_user
+      SCECS_DB_PASSWORD: scecs_password
+      SCECS_RUN_INTEGRATION_TESTS: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Ruff
+        run: python -m ruff check .
+
+      - name: Run mypy
+        run: python -m mypy src tests
+
+      - name: Run unit tests
+        run: python -m pytest tests/unit
+
+      - name: Check database health
+        run: python -m scecs.db_health
+
+      - name: Run integration tests
+        run: python -m pytest tests/integration

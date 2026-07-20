@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+.envrc
+.secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local database files
+postgres-data/
+
+# Local files
+.DS_Store
+Thumbs.db
+*.log
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Data outputs
+data/rejected/*
+!data/rejected/.gitkeep
