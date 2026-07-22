@@ -40,6 +40,7 @@ def test_postgresql_schema_migration_creates_domain_constraints() -> None:
                     'candidate_risk_evaluations',
                     'exception_episodes',
                     'exception_event_envelopes',
+                    'notification_events',
                     'evidence_links',
                     'analytics_publications'
                   )
@@ -54,7 +55,7 @@ def test_postgresql_schema_migration_creates_domain_constraints() -> None:
                 where schemaname = 'public'
                   and tablename = 'exception_episodes'
                   and indexname = 'uq_exception_episodes_active_line_site'
-                  and indexdef like '%WHERE ((current_state)::text <> ''closed''::text)%'
+                  and indexdef like '%WHERE (closed_at IS NULL)%'
                 """
             )
         ).scalar_one()
@@ -75,6 +76,6 @@ def test_postgresql_schema_migration_creates_domain_constraints() -> None:
             )
         ).scalar_one()
 
-    assert table_count == 7
+    assert table_count == 8
     assert active_index_count == 1
     assert overlap_constraint_count == 5

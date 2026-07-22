@@ -216,6 +216,6 @@ class UomConversion(UuidPrimaryKeyMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id"), nullable=False)
     from_uom: Mapped[str] = mapped_column(String(20), nullable=False)
     to_uom: Mapped[str] = mapped_column(String(20), nullable=False)
-    conversion_factor: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False)
+    conversion_factor: Mapped[int] = mapped_column(Integer, nullable=False)
     effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

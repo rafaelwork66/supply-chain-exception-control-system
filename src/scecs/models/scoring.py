@@ -78,6 +78,10 @@ class CandidateRiskContribution(UuidPrimaryKeyMixin, Base):
             "availability_status in ('available-not-triggered','triggered','unavailable','invalid')",
             name="availability_status",
         ),
+        CheckConstraint(
+            "applied_points = gross_points + cap_adjustment",
+            name="applied_points_match_cap_adjustment",
+        ),
     )
 
     candidate_evaluation_id: Mapped[uuid.UUID] = mapped_column(
@@ -95,6 +99,8 @@ class CandidateRiskContribution(UuidPrimaryKeyMixin, Base):
     threshold_value: Mapped[str | None] = mapped_column(String(80))
     triggered: Mapped[bool] = mapped_column(nullable=False)
     gross_points: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)
+    cap_adjustment: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False, default=0)
     applied_points: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)
+    missing_signal_reason: Mapped[str | None] = mapped_column(Text)
     explanation_code: Mapped[str] = mapped_column(String(80), nullable=False)
     input_lineage: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)

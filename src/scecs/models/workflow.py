@@ -39,9 +39,14 @@ class ExceptionEpisode(UuidPrimaryKeyMixin, Base):
             "po_line_id",
             "site_id",
             unique=True,
-            postgresql_where=text("current_state <> 'closed'"),
+            postgresql_where=text("closed_at IS NULL"),
         ),
         CheckConstraint(f"current_state in ({ALL_STATES_SQL})", name="current_state"),
+        CheckConstraint(
+            "(current_state = 'closed' and closed_at is not null) "
+            "or (current_state <> 'closed' and closed_at is null)",
+            name="closed_state_projection_consistency",
+        ),
         CheckConstraint(
             "calculated_severity in ('monitor','low','medium','high','critical')",
             name="calculated_severity",
@@ -85,6 +90,7 @@ class ExceptionEventEnvelope(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
     __tablename__ = "exception_event_envelopes"
     __table_args__ = (
         UniqueConstraint("episode_id", "event_sequence"),
+        UniqueConstraint("episode_id", "idempotency_key"),
         CheckConstraint("event_sequence > 0", name="positive_event_sequence"),
     )
 
@@ -92,6 +98,7 @@ class ExceptionEventEnvelope(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
         ForeignKey("exception_episodes.id"), nullable=False
     )
     event_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
     event_type: Mapped[str] = mapped_column(String(60), nullable=False)
     effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
@@ -390,3 +397,34 @@ class EpisodeRelationship(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
     )
     relationship_type: Mapped[str] = mapped_column(String(80), nullable=False)
     relationship_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class NotificationEvent(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
+    """Inactive notification audit structure; no sending behaviour is implemented."""
+
+    __tablename__ = "notification_events"
+    __table_args__ = (
+        UniqueConstraint("episode_id", "idempotency_key"),
+        CheckConstraint("attempt_number > 0", name="positive_attempt_number"),
+        CheckConstraint(
+            "delivery_status in ('requested','queued','sent','failed','cancelled','skipped')",
+            name="delivery_status",
+        ),
+    )
+
+    episode_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("exception_episodes.id"), nullable=False
+    )
+    notification_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    recipient_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    recipient_queue: Mapped[str | None] = mapped_column(String(120))
+    trigger_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("exception_event_envelopes.id")
+    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    provider_reference: Mapped[str | None] = mapped_column(String(180))
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text)

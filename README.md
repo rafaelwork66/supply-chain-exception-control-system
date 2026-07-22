@@ -139,9 +139,15 @@ The governing source documents are stored under `docs/governing/`. The operation
 
 The Test and Evidence Strategy is present as `docs/governing/06_test_and_evidence_strategy_v1.0.docx` because the provided source bundle contained a DOCX file for that document.
 
+Physical schema support documents:
+
+- `docs/design/physical_schema_v1.0.md`
+- `docs/design/schema_decision_log.md`
+- `docs/design/schema_summary.mmd`
+
 ## Alembic Migrations
 
-Alembic is configured for PostgreSQL. The first migration creates the physical schema only; it does not implement business rules or lifecycle services.
+Alembic is configured for PostgreSQL. The first migration creates the physical schema only; it does not implement business rules, lifecycle services, scoring services, notification sending, or AI.
 
 Check the current migration state:
 

@@ -24,6 +24,7 @@ def test_domain_metadata_contains_required_tables() -> None:
         "exception_state_events",
         "approval_requests",
         "approval_decisions",
+        "notification_events",
         "suppression_controls",
         "evidence_references",
         "evidence_links",
@@ -38,6 +39,7 @@ def test_exception_episode_has_active_uniqueness_index() -> None:
     """The ORM metadata should document the active line/site uniqueness index."""
 
     table = Base.metadata.tables["exception_episodes"]
-    index_names = {index.name for index in table.indexes}
+    indexes = {str(index.name): index for index in table.indexes}
 
-    assert "uq_exception_episodes_active_line_site" in index_names
+    active_index = indexes["uq_exception_episodes_active_line_site"]
+    assert str(active_index.dialect_options["postgresql"]["where"]) == "closed_at IS NULL"

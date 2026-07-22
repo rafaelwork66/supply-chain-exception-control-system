@@ -267,7 +267,7 @@ def upgrade() -> None:
         ),
         sa.Column("from_uom", sa.String(20), nullable=False),
         sa.Column("to_uom", sa.String(20), nullable=False),
-        sa.Column("conversion_factor", sa.Numeric(18, 8), nullable=False),
+        sa.Column("conversion_factor", sa.Integer(), nullable=False),
         sa.Column("effective_from", sa.DateTime(timezone=True), nullable=False),
         sa.Column("effective_to", sa.DateTime(timezone=True)),
         sa.CheckConstraint("conversion_factor > 0"),
@@ -763,6 +763,11 @@ def _create_scoring_and_workflow_tables() -> None:
             "'open','assigned','investigating','action_agreed','monitoring',"
             "'resolved','suppressed','closed')"
         ),
+        sa.CheckConstraint(
+            "(current_state = 'closed' and closed_at is not null) "
+            "or (current_state <> 'closed' and closed_at is null)"
+        ),
+        sa.CheckConstraint("predecessor_episode_id is null or predecessor_episode_id <> id"),
         sa.CheckConstraint("calculated_severity in ('monitor','low','medium','high','critical')"),
         sa.CheckConstraint("effective_severity in ('monitor','low','medium','high','critical')"),
         sa.CheckConstraint("episode_sequence > 0"),
@@ -860,7 +865,14 @@ def _create_scoring_and_workflow_tables() -> None:
         sa.Column("threshold_value", sa.String(80)),
         sa.Column("triggered", sa.Boolean(), nullable=False),
         sa.Column("gross_points", sa.Numeric(8, 2), nullable=False),
+        sa.Column(
+            "cap_adjustment",
+            sa.Numeric(8, 2),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
         sa.Column("applied_points", sa.Numeric(8, 2), nullable=False),
+        sa.Column("missing_signal_reason", sa.Text()),
         sa.Column("explanation_code", sa.String(80), nullable=False),
         sa.Column(
             "input_lineage",
@@ -871,6 +883,7 @@ def _create_scoring_and_workflow_tables() -> None:
         sa.CheckConstraint(
             "availability_status in ('available-not-triggered','triggered','unavailable','invalid')"
         ),
+        sa.CheckConstraint("applied_points = gross_points + cap_adjustment"),
         sa.UniqueConstraint("candidate_evaluation_id", "component_code"),
     )
     _create_workflow_tables()
@@ -890,6 +903,7 @@ def _create_workflow_tables() -> None:
             nullable=False,
         ),
         sa.Column("event_sequence", sa.Integer(), nullable=False),
+        sa.Column("idempotency_key", sa.String(160), nullable=False),
         sa.Column("event_type", sa.String(60), nullable=False),
         sa.Column("effective_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("actor_user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id")),
@@ -917,6 +931,7 @@ def _create_workflow_tables() -> None:
         sa.Column("after_payload", postgresql.JSONB()),
         sa.CheckConstraint("event_sequence > 0"),
         sa.UniqueConstraint("episode_id", "event_sequence"),
+        sa.UniqueConstraint("episode_id", "idempotency_key"),
     )
     op.create_table(
         "approval_requests",
@@ -1243,6 +1258,37 @@ def _create_workflow_tables() -> None:
         sa.CheckConstraint("from_episode_id <> to_episode_id"),
         sa.UniqueConstraint("from_episode_id", "to_episode_id", "relationship_type"),
     )
+    op.create_table(
+        "notification_events",
+        uuid_pk(),
+        recorded_at(),
+        sa.Column(
+            "episode_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("exception_episodes.id"),
+            nullable=False,
+        ),
+        sa.Column("notification_type", sa.String(80), nullable=False),
+        sa.Column("recipient_user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id")),
+        sa.Column("recipient_queue", sa.String(120)),
+        sa.Column(
+            "trigger_event_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("exception_event_envelopes.id"),
+        ),
+        sa.Column("requested_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("sent_at", sa.DateTime(timezone=True)),
+        sa.Column("delivery_status", sa.String(30), nullable=False),
+        sa.Column("provider_reference", sa.String(180)),
+        sa.Column("attempt_number", sa.Integer(), nullable=False),
+        sa.Column("idempotency_key", sa.String(160), nullable=False),
+        sa.Column("failure_reason", sa.Text()),
+        sa.CheckConstraint("attempt_number > 0"),
+        sa.CheckConstraint(
+            "delivery_status in ('requested','queued','sent','failed','cancelled','skipped')"
+        ),
+        sa.UniqueConstraint("episode_id", "idempotency_key"),
+    )
 
 
 def _create_postgresql_constraints() -> None:
@@ -1253,7 +1299,7 @@ def _create_postgresql_constraints() -> None:
         "exception_episodes",
         ["po_line_id", "site_id"],
         unique=True,
-        postgresql_where=sa.text("current_state <> 'closed'"),
+        postgresql_where=sa.text("closed_at IS NULL"),
     )
     for table, cols in [
         ("supplier_versions", ["supplier_id"]),
@@ -1279,12 +1325,146 @@ def _create_postgresql_constraints() -> None:
     op.create_index(
         "ix_receipt_allocations_receipt", "receipt_allocations", ["receipt_transaction_id"]
     )
+    _create_constraint_triggers()
+
+
+def _create_constraint_triggers() -> None:
+    """Create PostgreSQL constraint triggers for cross-table governance controls."""
+
+    op.execute(
+        """
+        CREATE FUNCTION enforce_material_approval_independence()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            request_user uuid;
+            approval_type text;
+        BEGIN
+            SELECT requester_user_id, request_type
+            INTO request_user, approval_type
+            FROM approval_requests
+            WHERE id = NEW.approval_request_id;
+
+            IF approval_type IN (
+                'suppression',
+                'resolution',
+                'severity_override',
+                'material_recurrence',
+                'closure'
+            ) AND NEW.approver_user_id = request_user THEN
+                RAISE EXCEPTION 'material approval cannot be self-approved'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_material_approval_independence
+        AFTER INSERT OR UPDATE OF approval_request_id, approver_user_id
+        ON approval_decisions
+        DEFERRABLE INITIALLY IMMEDIATE
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_material_approval_independence();
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION enforce_successor_predecessor_closed()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            predecessor_state text;
+            predecessor_closed_at timestamptz;
+        BEGIN
+            IF NEW.predecessor_episode_id IS NULL THEN
+                RETURN NEW;
+            END IF;
+
+            IF NEW.predecessor_episode_id = NEW.id THEN
+                RAISE EXCEPTION 'successor episode cannot reference itself as predecessor'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            SELECT current_state, closed_at
+            INTO predecessor_state, predecessor_closed_at
+            FROM exception_episodes
+            WHERE id = NEW.predecessor_episode_id;
+
+            IF predecessor_state <> 'closed' OR predecessor_closed_at IS NULL THEN
+                RAISE EXCEPTION 'material recurrence predecessor must be formally closed'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_successor_predecessor_closed
+        AFTER INSERT OR UPDATE OF predecessor_episode_id
+        ON exception_episodes
+        DEFERRABLE INITIALLY IMMEDIATE
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_successor_predecessor_closed();
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION enforce_material_relationship_predecessor_closed()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            predecessor_state text;
+            predecessor_closed_at timestamptz;
+        BEGIN
+            IF NEW.relationship_type <> 'material_recurrence' THEN
+                RETURN NEW;
+            END IF;
+
+            SELECT current_state, closed_at
+            INTO predecessor_state, predecessor_closed_at
+            FROM exception_episodes
+            WHERE id = NEW.from_episode_id;
+
+            IF predecessor_state <> 'closed' OR predecessor_closed_at IS NULL THEN
+                RAISE EXCEPTION 'material recurrence relationship predecessor must be formally closed'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_material_relationship_predecessor_closed
+        AFTER INSERT OR UPDATE OF from_episode_id, relationship_type
+        ON episode_relationships
+        DEFERRABLE INITIALLY IMMEDIATE
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_material_relationship_predecessor_closed();
+        """
+    )
 
 
 def downgrade() -> None:
     """Drop the physical schema."""
 
+    op.execute("DROP FUNCTION IF EXISTS enforce_material_relationship_predecessor_closed() CASCADE")
+    op.execute("DROP FUNCTION IF EXISTS enforce_successor_predecessor_closed() CASCADE")
+    op.execute("DROP FUNCTION IF EXISTS enforce_material_approval_independence() CASCADE")
     tables = [
+        "notification_events",
         "episode_relationships",
         "evidence_links",
         "evidence_references",
@@ -1335,4 +1515,4 @@ def downgrade() -> None:
         "source_systems",
     ]
     for table in tables:
-        op.drop_table(table)
+        op.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
