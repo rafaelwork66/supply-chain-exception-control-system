@@ -64,7 +64,8 @@ def generate_outcomes(
                 "outcome_onset": date_iso(onset) if onset is not None else "",
                 "observable_source_signal": "true" if observable_signal else "false",
                 "opportunity_class": _opportunity_class(adverse=adverse, observable_signal=observable_signal),
-                "scenario_ids": ";".join(line.scenario_types),
+                "scenario_ids": ";".join(line.scenario_ids),
+                "scenario_types": ";".join(line.scenario_types),
             }
         )
     return rows

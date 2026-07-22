@@ -37,6 +37,33 @@ The package lives under `src/scecs/synthetic/`.
 | `export.py` | Deterministic CSV, manifest and summary export. |
 | `cli.py` | `generate`, `validate` and `summarise` commands. |
 
+## Source-Data Hardening Controls
+
+Scenario traceability uses registry identifiers, not labels. Operational datasets store actual scenario UUIDs in `scenario_ids` and readable labels in `scenario_types`. `scenario_registry.csv` remains the source of scenario type, affected entity, affected key, start date and end date.
+
+The generator applies observable effects for each mandatory scenario:
+
+- `overdue_critical_order`: open critical line, need date before as-of date and positive residual quantity.
+- `partial_receipt_remaining_exposure`: receipts below final line quantity with residual exposure.
+- `supplier_commitment_breach`: supplier commitment followed by a later actual receipt.
+- `demand_shock`: increased demand for the affected product/site.
+- `receipt_correction`: correction transaction linked to an original receipt.
+- `receipt_reversal`: reversal transaction linked to an original receipt.
+- `split_schedule`: two or more schedules reconciling to final line quantity.
+- `supplier_deterioration`: late delivery behaviour for the affected supplier context.
+- `inventory_reallocation_opportunity`: shortage at the affected site and surplus at the other site.
+- `false_positive_source_data_correction`: initial exposure-like inventory observation followed by a correcting observation.
+- `missing_supplier_signal`: no supplier commitment observation for the affected line.
+- `missing_inventory_signal`: stale scenario-tagged evidence and no valid current inventory observation for the affected product/site.
+
+Purchase orders now choose the supplier at PO-header creation. Every line version under that PO carries the same `po_supplier_id`, and the PO header status is reconciled against final line statuses.
+
+For every line version, `base_quantity = ordered_quantity x conversion_factor`; amendments recompute ordered quantity, base quantity, need date and line value while preserving earlier versions.
+
+Every receipt, correction and reversal has allocation rows. Allocation quantities remain non-negative and reconcile to `ABS(receipt_transactions.base_quantity)`. The sign is represented by the receipt transaction, not by the allocation quantity. Schedule allocations are capped on a net signed basis; excess goes to `line_residual`.
+
+Demand and inventory are generated at product-site grain. When several PO-line scenarios share a product-site, those rows aggregate the relevant scenario UUIDs so each scenario remains traceable. Missing-inventory scenarios conflict with current inventory correction and reallocation scenarios at this grain, so incompatible missing-inventory assignments are removed before downstream generation.
+
 ## Commands
 
 Use the CI-sized profile for fast local checks:

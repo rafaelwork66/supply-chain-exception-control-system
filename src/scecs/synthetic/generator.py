@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from scecs.synthetic._util import stable_id
 from scecs.synthetic.config import SyntheticGeneratorConfig, configuration_hash
 from scecs.synthetic.demand import generate_demand_requirements
@@ -9,10 +11,15 @@ from scecs.synthetic.inventory import generate_inventory_snapshots
 from scecs.synthetic.master_data import generate_master_data
 from scecs.synthetic.organisation import generate_organisation
 from scecs.synthetic.outcomes import generate_outcomes
-from scecs.synthetic.purchase_orders import generate_purchase_orders
+from scecs.synthetic.purchase_orders import LineSnapshot, generate_purchase_orders
 from scecs.synthetic.random_context import RandomContext
 from scecs.synthetic.receipts import generate_receipts_and_commitments
-from scecs.synthetic.scenarios import MANDATORY_SCENARIO_TYPES, assign_line_scenarios, build_scenario_registry
+from scecs.synthetic.scenarios import (
+    MANDATORY_SCENARIO_TYPES,
+    assign_line_scenarios,
+    build_scenario_registry,
+    scenario_details_by_line,
+)
 from scecs.synthetic.supplier_performance import generate_supplier_performance
 from scecs.synthetic.types import DatasetMap, GeneratedDatasetBundle, Record
 
@@ -35,6 +42,7 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
     line_keys = [f"POL-{line_number:08d}" for line_number in range(1, config.po_line_count + 1)]
     scenario_map = assign_line_scenarios(config, random_context.stream("scenario"), line_keys)
     scenario_registry, scenario_assignments = build_scenario_registry(config, scenario_map)
+    scenario_details = scenario_details_by_line(scenario_assignments, scenario_registry)
 
     procurement, line_snapshots = generate_purchase_orders(
         config,
@@ -45,7 +53,13 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         products=master["products"],
         sites=organisation["sites"],
         uom_conversions=master["uom_conversions"],
-        scenario_map=scenario_map,
+        scenario_details=scenario_details,
+    )
+    scenario_registry, scenario_assignments, line_snapshots = _prune_inventory_signal_conflicts(
+        scenario_registry,
+        scenario_assignments,
+        procurement,
+        line_snapshots,
     )
 
     receipts = generate_receipts_and_commitments(
@@ -55,6 +69,7 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         source_load_id=source_load_by_type["receipts"],
         line_snapshots=line_snapshots,
         delivery_schedules=procurement["delivery_schedules"],
+        hidden_supplier_archetypes=hidden_supplier_archetypes,
     )
     inventory = generate_inventory_snapshots(
         config,
@@ -63,6 +78,7 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         products=master["products"],
         sites=organisation["sites"],
         policies=master["product_site_inventory_policies"],
+        line_snapshots=line_snapshots,
     )
     demand = generate_demand_requirements(
         config,
@@ -70,6 +86,7 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         source_load_id=source_load_by_type["demand_requirements"],
         product_versions=master["product_versions"],
         sites=organisation["sites"],
+        line_snapshots=line_snapshots,
     )
     supplier_performance = generate_supplier_performance(
         config,
@@ -77,6 +94,8 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         suppliers=master["suppliers"],
         sites=organisation["sites"],
         hidden_supplier_archetypes=hidden_supplier_archetypes,
+        line_snapshots=line_snapshots,
+        receipt_transactions=receipts["receipt_transactions"],
     )
     outcomes = generate_outcomes(
         config,
@@ -109,6 +128,79 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         as_of_timestamp=config.as_of_timestamp,
         scenario_types=MANDATORY_SCENARIO_TYPES,
     )
+
+
+def _prune_inventory_signal_conflicts(
+    scenario_registry: list[Record],
+    scenario_assignments: list[Record],
+    procurement: DatasetMap,
+    line_snapshots: list[LineSnapshot],
+) -> tuple[list[Record], list[Record], list[LineSnapshot]]:
+    """Remove incompatible missing-inventory scenarios at product-site grain."""
+
+    lines_by_product_site: dict[tuple[str, str], list[LineSnapshot]] = {}
+    for line in line_snapshots:
+        lines_by_product_site.setdefault((line.product_id, line.site_id), []).append(line)
+
+    scenario_ids_to_remove: set[str] = set()
+    current_inventory_types = {
+        "false_positive_source_data_correction",
+        "inventory_reallocation_opportunity",
+    }
+    for lines in lines_by_product_site.values():
+        scenario_types = {scenario_type for line in lines for scenario_type in line.scenario_types}
+        has_missing_inventory = "missing_inventory_signal" in scenario_types
+        has_current_inventory_scenario = bool(scenario_types & current_inventory_types)
+        if not has_missing_inventory or not has_current_inventory_scenario:
+            continue
+        for line in lines:
+            scenario_ids_to_remove.update(
+                scenario_id
+                for scenario_id, scenario_type in zip(line.scenario_ids, line.scenario_types, strict=True)
+                if scenario_type == "missing_inventory_signal"
+            )
+
+    if not scenario_ids_to_remove:
+        return scenario_registry, scenario_assignments, line_snapshots
+
+    pruned_registry = [
+        row for row in scenario_registry if str(row["scenario_id"]) not in scenario_ids_to_remove
+    ]
+    pruned_assignments = [
+        row for row in scenario_assignments if str(row["scenario_id"]) not in scenario_ids_to_remove
+    ]
+    pruned_snapshots = [
+        replace(
+            line,
+            scenario_ids=tuple(
+                scenario_id
+                for scenario_id in line.scenario_ids
+                if scenario_id not in scenario_ids_to_remove
+            ),
+            scenario_types=tuple(
+                scenario_type
+                for scenario_id, scenario_type in zip(line.scenario_ids, line.scenario_types, strict=True)
+                if scenario_id not in scenario_ids_to_remove
+            ),
+        )
+        for line in line_snapshots
+    ]
+    for dataset_name in ("purchase_order_line_versions", "delivery_schedules"):
+        for row in procurement[dataset_name]:
+            _remove_scenario_ids_from_row(row, scenario_ids_to_remove)
+    return pruned_registry, pruned_assignments, pruned_snapshots
+
+
+def _remove_scenario_ids_from_row(row: Record, scenario_ids_to_remove: set[str]) -> None:
+    scenario_ids = str(row.get("scenario_ids", "")).split(";")
+    scenario_types = str(row.get("scenario_types", "")).split(";")
+    remaining = [
+        (scenario_id, scenario_type)
+        for scenario_id, scenario_type in zip(scenario_ids, scenario_types, strict=True)
+        if scenario_id and scenario_id not in scenario_ids_to_remove
+    ]
+    row["scenario_ids"] = ";".join(scenario_id for scenario_id, _ in remaining)
+    row["scenario_types"] = ";".join(scenario_type for _, scenario_type in remaining)
 
 
 def _update_source_load_counts(datasets: DatasetMap) -> None:

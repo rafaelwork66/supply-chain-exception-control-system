@@ -1,28 +1,28 @@
 {
   "row_counts": {
     "calendar_versions": 1,
-    "delivery_schedules": 377,
+    "delivery_schedules": 363,
     "demand_requirements": 320,
-    "inventory_snapshots": 80,
+    "inventory_snapshots": 81,
     "ownership_mappings": 8,
     "pipeline_runs": 1,
     "product_site_inventory_policies": 80,
     "product_versions": 40,
     "products": 40,
     "purchase_order_line_aliases": 260,
-    "purchase_order_line_versions": 276,
+    "purchase_order_line_versions": 282,
     "purchase_order_lines": 260,
-    "purchase_order_versions": 106,
-    "purchase_orders": 106,
-    "receipt_allocations": 363,
-    "receipt_transactions": 369,
+    "purchase_order_versions": 103,
+    "purchase_orders": 103,
+    "receipt_allocations": 441,
+    "receipt_transactions": 338,
     "rule_versions": 1,
     "scenario_assignments": 123,
     "scenario_registry": 123,
     "sites": 2,
     "source_loads": 6,
     "source_systems": 1,
-    "supplier_commitment_observations": 228,
+    "supplier_commitment_observations": 227,
     "supplier_performance_snapshots": 24,
     "supplier_versions": 12,
     "suppliers": 12,
@@ -46,37 +46,37 @@
     "partial_receipt_remaining_exposure": 1
   },
   "outcome_opportunity_counts": {
-    "true_negative_opportunity": 185,
-    "true_positive_opportunity": 21,
-    "false_negative_opportunity": 20,
-    "false_positive_opportunity": 34
+    "true_negative_opportunity": 190,
+    "true_positive_opportunity": 23,
+    "false_negative_opportunity": 22,
+    "false_positive_opportunity": 25
   },
   "lines_by_site": {
-    "MEL-DC": 130,
-    "GEEL-MFG": 130
+    "MEL-DC": 128,
+    "GEEL-MFG": 132
   },
   "lines_by_product_category": {
-    "resale_finished_goods": 96,
-    "components": 129,
-    "packaging": 14,
-    "mro_consumables": 21
+    "resale_finished_goods": 108,
+    "components": 119,
+    "mro_consumables": 24,
+    "packaging": 9
   },
   "status_distribution": {
-    "closed": 228,
-    "cancelled": 2,
-    "open": 27,
-    "on_hold": 3
+    "closed": 224,
+    "cancelled": 6,
+    "open": 29,
+    "on_hold": 1
   },
   "split_schedule_rate": 0.2115,
-  "partial_receipt_rate": 0.2269,
-  "late_receipt_rate": 0.4282,
-  "correction_reversal_rate": 0.0163,
+  "partial_receipt_rate": 0.1769,
+  "late_receipt_rate": 0.503,
+  "correction_reversal_rate": 0.0118,
   "missing_signal_count": 13,
   "outcome_distribution": {
-    "none": 219,
-    "moderate": 23,
-    "low": 15,
-    "severe": 3
+    "none": 215,
+    "moderate": 28,
+    "low": 16,
+    "severe": 1
   },
   "passed": true,
   "errors": []

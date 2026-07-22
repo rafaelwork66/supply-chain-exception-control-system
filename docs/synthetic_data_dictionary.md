@@ -59,3 +59,16 @@ The generator includes at least one instance of each mandatory scenario type:
 - Reporting currency is `AUD`.
 - Base UOM is `EA`.
 - Purchase UOM values are `EA`, `CASE` or `PALLET`.
+
+## Important Field Notes
+
+- `scenario_ids` contains semicolon-delimited UUIDs from `scenario_registry.csv`.
+- `scenario_types` contains semicolon-delimited readable scenario labels for review.
+- Product-site facts such as `demand_requirements` and `inventory_snapshots` may aggregate multiple scenario UUIDs because they are not PO-line-grain datasets.
+- Missing-inventory scenarios are not emitted where they would conflict with a current correction or reallocation scenario for the same product-site.
+- `purchase_order_line_versions.po_supplier_id` repeats the governed PO-header supplier for validation and source-data traceability.
+- `purchase_order_line_versions.unit_price_aud` and `line_value_aud` reconcile to the final or historical version quantity.
+- `purchase_order_line_versions.critical_order_flag` identifies the synthetic controlled critical-order scenario and is not a risk score.
+- `receipt_allocations.corrected_receipt_id` records inherited or explicit allocation target lineage for corrections and reversals.
+- `receipt_allocations.allocated_base_quantity` is always non-negative; the signed transaction effect comes from `receipt_transactions.base_quantity`.
+- `inventory_snapshots.corrects_snapshot_id` is populated for source-data correction scenarios.

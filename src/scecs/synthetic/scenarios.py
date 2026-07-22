@@ -89,3 +89,40 @@ def build_scenario_registry(
                 }
             )
     return registry, assignments
+
+
+def scenario_details_by_line(
+    scenario_assignments: list[Record],
+    scenario_registry: list[Record],
+) -> dict[str, list[Record]]:
+    """Return scenario detail records grouped by canonical PO-line key."""
+
+    registry_by_id = {str(row["scenario_id"]): row for row in scenario_registry}
+    grouped: dict[str, list[Record]] = {}
+    for assignment in scenario_assignments:
+        line_key = str(assignment["canonical_line_key"])
+        scenario_id = str(assignment["scenario_id"])
+        scenario = registry_by_id[scenario_id]
+        grouped.setdefault(line_key, []).append(
+            {
+                "scenario_id": scenario_id,
+                "scenario_type": scenario["scenario_type"],
+                "affected_entity_type": scenario["affected_entity_type"],
+                "affected_key": scenario["affected_key"],
+                "start_date": scenario["start_date"],
+                "end_date": scenario["end_date"],
+            }
+        )
+    return grouped
+
+
+def scenario_ids(details: list[Record]) -> str:
+    """Return semicolon-delimited scenario UUIDs for an operational row."""
+
+    return ";".join(str(row["scenario_id"]) for row in details)
+
+
+def scenario_types(details: list[Record]) -> str:
+    """Return semicolon-delimited readable scenario labels for an operational row."""
+
+    return ";".join(str(row["scenario_type"]) for row in details)
