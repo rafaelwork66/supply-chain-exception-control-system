@@ -18,11 +18,11 @@ Database control: `applied_points = gross_points + cap_adjustment`.
 
 ## SDL-003: UOM Conversion Factors
 
-Decision: `uom_conversions.conversion_factor` is a positive integer.
+Decision: `uom_conversions.conversion_factor` is a positive numeric value that must be mathematically integral.
 
-Reason: the synthetic MVP contract uses whole-number EA, CASE, and PALLET conversions. Decimal conversion factors can be revisited only if a future governing document requires them.
+Reason: the synthetic MVP contract uses whole-number EA, CASE, and PALLET conversions. PostgreSQL can coerce fractional input before an integer column check sees it, so the schema uses a numeric column with an explicit integrality check to reject zero, negative, and fractional factors reliably.
 
-Database control: integer type plus `conversion_factor > 0`.
+Database control: `conversion_factor > 0 and conversion_factor = trunc(conversion_factor)`.
 
 ## SDL-004: Material Approval Independence
 

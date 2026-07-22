@@ -207,7 +207,10 @@ class UomConversion(UuidPrimaryKeyMixin, Base):
     __tablename__ = "uom_conversions"
     __table_args__ = (
         UniqueConstraint("product_id", "from_uom", "to_uom", "effective_from"),
-        CheckConstraint("conversion_factor > 0", name="positive_conversion_factor"),
+        CheckConstraint(
+            "conversion_factor > 0 and conversion_factor = trunc(conversion_factor)",
+            name="positive_integral_conversion_factor",
+        ),
         CheckConstraint(
             "effective_to is null or effective_to > effective_from", name="valid_interval"
         ),
@@ -216,6 +219,6 @@ class UomConversion(UuidPrimaryKeyMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id"), nullable=False)
     from_uom: Mapped[str] = mapped_column(String(20), nullable=False)
     to_uom: Mapped[str] = mapped_column(String(20), nullable=False)
-    conversion_factor: Mapped[int] = mapped_column(Integer, nullable=False)
+    conversion_factor: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False)
     effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

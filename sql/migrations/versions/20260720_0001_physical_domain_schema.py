@@ -267,10 +267,10 @@ def upgrade() -> None:
         ),
         sa.Column("from_uom", sa.String(20), nullable=False),
         sa.Column("to_uom", sa.String(20), nullable=False),
-        sa.Column("conversion_factor", sa.Integer(), nullable=False),
+        sa.Column("conversion_factor", sa.Numeric(18, 8), nullable=False),
         sa.Column("effective_from", sa.DateTime(timezone=True), nullable=False),
         sa.Column("effective_to", sa.DateTime(timezone=True)),
-        sa.CheckConstraint("conversion_factor > 0"),
+        sa.CheckConstraint("conversion_factor > 0 and conversion_factor = trunc(conversion_factor)"),
         sa.CheckConstraint("effective_to is null or effective_to > effective_from"),
         sa.UniqueConstraint("product_id", "from_uom", "to_uom", "effective_from"),
     )

@@ -43,7 +43,7 @@ Deferred:
 - `uq_exception_episodes_active_line_site` enforces one active episode per canonical PO line and receiving site where `closed_at IS NULL`.
 - A projection consistency check enforces that `current_state = 'closed'` requires `closed_at IS NOT NULL`, and non-Closed states require `closed_at IS NULL`.
 - Candidate contribution rows preserve `applied_points = gross_points + cap_adjustment`.
-- UOM conversion factors are positive integers for the synthetic MVP contract covering EA, CASE, and PALLET conversions.
+- UOM conversion factors are positive and mathematically integral for the synthetic MVP contract covering EA, CASE, and PALLET conversions.
 - Constraint triggers prevent material self-approval for `suppression`, `resolution`, `severity_override`, `material_recurrence`, and `closure` approval request types.
 - Constraint triggers require material-recurrence successors and relationships to reference a predecessor episode that is formally Closed and has `closed_at` populated.
 - Event envelopes include an explicit `idempotency_key` unique within an episode; `correlation_id` remains separate trace metadata.
