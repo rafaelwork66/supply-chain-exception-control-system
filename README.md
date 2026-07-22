@@ -2,7 +2,7 @@
 
 Technical foundation for a portfolio project that will later support supply chain exception monitoring, PostgreSQL storage, Streamlit views, Power BI reporting, GitHub Actions, and controlled AI recommendations.
 
-This stage creates only the repository and development baseline. It does not implement business rules, exception lifecycle logic, database domain tables, risk scoring, notifications, Streamlit pages, or AI features.
+The repository now includes the development baseline and the first physical PostgreSQL domain schema. It does not implement business rules, exception lifecycle services, risk scoring logic, notifications, Streamlit pages, Power BI models, or AI features.
 
 ## Project Structure
 
@@ -15,6 +15,7 @@ supply-chain-exception-control-system/
 |   +-- database.py
 |   +-- db_health.py
 |   +-- logging_config.py
+|   +-- models/
 +-- tests/
 |   +-- unit/
 |   +-- integration/
@@ -26,6 +27,8 @@ supply-chain-exception-control-system/
 |   +-- sample/
 |   +-- rejected/
 +-- docs/
+|   +-- governing/
+|   +-- design/
 +-- powerbi/
 +-- scripts/
 +-- .github/workflows/
@@ -38,7 +41,7 @@ supply-chain-exception-control-system/
 - Structured application logging
 - PostgreSQL 16 local development with Docker Compose
 - SQLAlchemy 2.x engine and transaction-safe session helpers
-- Alembic migration infrastructure without domain tables
+- Alembic migration infrastructure with the first governed physical PostgreSQL schema
 - Pytest test setup
 - Ruff linting
 - Mypy type checking
@@ -130,14 +133,32 @@ docker compose down
 
 The Docker Compose password is a local development value only. Real secrets must stay outside Git.
 
+## Governing Documents
+
+The governing source documents are stored under `docs/governing/`. The operational application design document and physical schema note are stored under `docs/design/`.
+
+The Test and Evidence Strategy is present as `docs/governing/06_test_and_evidence_strategy_v1.0.docx` because the provided source bundle contained a DOCX file for that document.
+
+Physical schema support documents:
+
+- `docs/design/physical_schema_v1.0.md`
+- `docs/design/schema_decision_log.md`
+- `docs/design/schema_summary.mmd`
+
 ## Alembic Migrations
 
-Alembic is configured, but there are no domain tables yet. That is intentional at this stage.
+Alembic is configured for PostgreSQL. The first migration creates the physical schema only; it does not implement business rules, lifecycle services, scoring services, notification sending, or AI.
 
 Check the current migration state:
 
 ```powershell
 python -m alembic current
+```
+
+Apply migrations to the configured local PostgreSQL database:
+
+```powershell
+python -m alembic upgrade head
 ```
 
 ## Development Commands
@@ -197,7 +218,7 @@ The workflow:
 - runs unit tests;
 - starts a PostgreSQL 16 service container;
 - runs the database health check;
-- runs PostgreSQL integration tests.
+- runs PostgreSQL integration tests, including the migration-based schema constraint check.
 
 The CI database uses local service-container credentials only:
 

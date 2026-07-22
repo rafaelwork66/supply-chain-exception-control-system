@@ -1,23 +1,30 @@
-"""Alembic migration environment.
-
-The project has no domain tables yet, so metadata is intentionally empty.
-"""
+"""Alembic migration environment."""
 
 from __future__ import annotations
 
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import MetaData, engine_from_config, pool
+from sqlalchemy import engine_from_config, pool
 
 from scecs.config import get_database_settings
+from scecs.models import Base
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = MetaData()
+target_metadata = Base.metadata
+
+
+def get_target_metadata() -> object | None:
+    """Use model metadata for autogeneration without affecting hand-authored migrations."""
+
+    command_options = getattr(config, "cmd_opts", None)
+    if command_options is not None and getattr(command_options, "autogenerate", False):
+        return target_metadata
+    return None
 
 
 def run_migrations_offline() -> None:
@@ -26,7 +33,7 @@ def run_migrations_offline() -> None:
     url = get_database_settings().sqlalchemy_url
     context.configure(
         url=url,
-        target_metadata=target_metadata,
+        target_metadata=get_target_metadata(),
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -48,7 +55,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(connection=connection, target_metadata=get_target_metadata())
 
         with context.begin_transaction():
             context.run_migrations()

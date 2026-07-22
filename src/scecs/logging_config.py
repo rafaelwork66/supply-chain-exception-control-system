@@ -40,4 +40,3 @@ def configure_logging(log_level: str = "INFO") -> None:
     root_logger.handlers.clear()
     root_logger.setLevel(level)
     root_logger.addHandler(handler)
-
