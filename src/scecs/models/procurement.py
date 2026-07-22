@@ -192,7 +192,8 @@ class ReceiptAllocation(UuidPrimaryKeyMixin, Base):
         UniqueConstraint("receipt_transaction_id", "allocation_sequence"),
         CheckConstraint("allocated_base_quantity >= 0", name="nonnegative_allocated_base_quantity"),
         CheckConstraint(
-            "delivery_schedule_id is not null or allocation_bucket = 'line_residual'",
+            "(allocation_bucket = 'line_residual' and delivery_schedule_id is null) "
+            "or (allocation_bucket <> 'line_residual' and delivery_schedule_id is not null)",
             name="schedule_or_line_residual_bucket",
         ),
     )

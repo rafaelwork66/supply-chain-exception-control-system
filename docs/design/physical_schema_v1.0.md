@@ -46,6 +46,8 @@ Deferred:
 - UOM conversion factors are positive and mathematically integral for the synthetic MVP contract covering EA, CASE, and PALLET conversions.
 - Constraint triggers prevent material self-approval for `suppression`, `resolution`, `severity_override`, `material_recurrence`, and `closure` approval request types.
 - Constraint triggers require material-recurrence successors and relationships to reference a predecessor episode that is formally Closed and has `closed_at` populated.
+- Constraint triggers enforce that receipt allocations and supplier commitments can reference only schedules belonging to the same PO line. Ordinary foreign keys are insufficient because the comparison depends on values reached through two parent rows.
+- Receipt allocation bucket checks enforce that schedule allocations have a schedule and line-residual allocations do not.
 - Event envelopes include an explicit `idempotency_key` unique within an episode; `correlation_id` remains separate trace metadata.
 - Check constraints enforce controlled states, severities, dispositions, statuses, score ranges, positive quantities, and non-self episode relationships.
 - `JSONB` is used only for safe metadata, payload snapshots, and controlled representation fields.

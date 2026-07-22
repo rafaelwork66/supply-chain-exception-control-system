@@ -291,6 +291,65 @@ def create_user(connection: Connection, code: str, display_name: str, now: datet
     )
 
 
+def create_line_and_schedule(
+    connection: Connection, context: dict[str, object], suffix: str, label: str
+) -> tuple[object, object]:
+    """Insert an additional PO line and schedule in the reference context."""
+
+    po_line_id = execute_scalar(
+        connection,
+        """
+        insert into purchase_order_lines (purchase_order_id, canonical_line_key)
+        values (:purchase_order_id, :line_key)
+        returning id
+        """,
+        {
+            "purchase_order_id": context["purchase_order_id"],
+            "line_key": f"PO-{suffix}-{label}",
+        },
+    )
+    connection.execute(
+        text(
+            """
+            insert into purchase_order_line_versions (
+                po_line_id, source_load_id, product_id, site_id, amendment_version,
+                ordered_quantity, order_uom, base_quantity, need_date, requested_date,
+                line_status, effective_at
+            )
+            values (
+                :po_line_id, :source_load_id, :product_id, :site_id, 1, 50,
+                'EA', 50, :need_date, :need_date, 'open', :now
+            )
+            """
+        ),
+        {
+            "po_line_id": po_line_id,
+            "source_load_id": context["source_load_id"],
+            "product_id": context["product_id"],
+            "site_id": context["site_id"],
+            "need_date": date(2026, 8, 5),
+            "now": context["now"],
+        },
+    )
+    schedule_id = execute_scalar(
+        connection,
+        """
+        insert into delivery_schedules (
+            po_line_id, source_schedule_key, schedule_version, scheduled_quantity,
+            requested_date, confirmed_date, expected_date, schedule_status
+        )
+        values (:po_line_id, :schedule_key, 1, 50, :need_date, null, :need_date, 'open')
+        returning id
+        """,
+        {
+            "po_line_id": po_line_id,
+            "schedule_key": f"SCH-{suffix}-{label}",
+            "need_date": date(2026, 8, 5),
+        },
+    )
+    return po_line_id, schedule_id
+
+
 def create_candidate(
     connection: Connection,
     suffix: str,
@@ -593,6 +652,159 @@ def test_reference_procurement_receipt_and_candidate_behaviour(engine: Engine) -
                 {
                     "candidate_id": context["candidate_id"],
                     "rule_component_id": context["rule_component_id"],
+                },
+            )
+
+
+@pytest.mark.integration
+def test_receipt_allocation_and_supplier_commitment_line_consistency(engine: Engine) -> None:
+    """Schedule references must stay on the same PO line as the receipt or commitment."""
+
+    migrate_to_head()
+    suffix = new_suffix()
+    with engine.begin() as connection:
+        context = make_reference_context(connection, suffix)
+        _other_line_id, other_schedule_id = create_line_and_schedule(
+            connection, context, suffix, "20"
+        )
+        receipt_id = execute_scalar(
+            connection,
+            """
+            insert into receipt_transactions (
+                source_system_id, source_load_id, po_line_id, receipt_document,
+                receipt_item_sequence, transaction_type, source_quantity, source_uom,
+                base_quantity, posted_at, corrects_receipt_id
+            )
+            values (
+                :source_system_id, :source_load_id, :po_line_id, :doc, '1',
+                'receipt', 20, 'EA', 20, :now, null
+            )
+            returning id
+            """,
+            {
+                "source_system_id": context["source_system_id"],
+                "source_load_id": context["source_load_id"],
+                "po_line_id": context["po_line_id"],
+                "doc": f"GR-LINE-{suffix}",
+                "now": context["now"],
+            },
+        )
+        connection.execute(
+            text(
+                """
+                insert into receipt_allocations (
+                    receipt_transaction_id, delivery_schedule_id, allocation_sequence,
+                    allocation_bucket, allocated_base_quantity
+                )
+                values (:receipt_id, :schedule_id, 1, 'schedule', 12)
+                """
+            ),
+            {"receipt_id": receipt_id, "schedule_id": context["schedule_id"]},
+        )
+        connection.execute(
+            text(
+                """
+                insert into receipt_allocations (
+                    receipt_transaction_id, delivery_schedule_id, allocation_sequence,
+                    allocation_bucket, allocated_base_quantity
+                )
+                values (:receipt_id, null, 2, 'line_residual', 8)
+                """
+            ),
+            {"receipt_id": receipt_id},
+        )
+        connection.execute(
+            text(
+                """
+                insert into supplier_commitment_observations (
+                    source_load_id, po_line_id, delivery_schedule_id, source_commitment_ref,
+                    committed_quantity, committed_date, channel, observed_at,
+                    supersedes_commitment_id
+                )
+                values (
+                    :source_load_id, :po_line_id, :schedule_id, :commitment_ref,
+                    20, :commit_date, 'portal', :now, null
+                )
+                """
+            ),
+            {
+                "source_load_id": context["source_load_id"],
+                "po_line_id": context["po_line_id"],
+                "schedule_id": context["schedule_id"],
+                "commitment_ref": f"COMMIT-SAME-{suffix}",
+                "commit_date": date(2026, 8, 1),
+                "now": context["now"],
+            },
+        )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    insert into receipt_allocations (
+                        receipt_transaction_id, delivery_schedule_id, allocation_sequence,
+                        allocation_bucket, allocated_base_quantity
+                    )
+                    values (:receipt_id, :schedule_id, 3, 'schedule', 1)
+                    """
+                ),
+                {"receipt_id": receipt_id, "schedule_id": other_schedule_id},
+            )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    insert into receipt_allocations (
+                        receipt_transaction_id, delivery_schedule_id, allocation_sequence,
+                        allocation_bucket, allocated_base_quantity
+                    )
+                    values (:receipt_id, :schedule_id, 4, 'line_residual', 1)
+                    """
+                ),
+                {"receipt_id": receipt_id, "schedule_id": context["schedule_id"]},
+            )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    insert into receipt_allocations (
+                        receipt_transaction_id, delivery_schedule_id, allocation_sequence,
+                        allocation_bucket, allocated_base_quantity
+                    )
+                    values (:receipt_id, null, 5, 'schedule', 1)
+                    """
+                ),
+                {"receipt_id": receipt_id},
+            )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    insert into supplier_commitment_observations (
+                        source_load_id, po_line_id, delivery_schedule_id, source_commitment_ref,
+                        committed_quantity, committed_date, channel, observed_at,
+                        supersedes_commitment_id
+                    )
+                    values (
+                        :source_load_id, :po_line_id, :schedule_id, :commitment_ref,
+                        20, :commit_date, 'portal', :now, null
+                    )
+                    """
+                ),
+                {
+                    "source_load_id": context["source_load_id"],
+                    "po_line_id": context["po_line_id"],
+                    "schedule_id": other_schedule_id,
+                    "commitment_ref": f"COMMIT-CROSS-{suffix}",
+                    "commit_date": date(2026, 8, 1),
+                    "now": context["now"],
                 },
             )
 

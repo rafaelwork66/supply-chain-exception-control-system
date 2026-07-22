@@ -596,7 +596,8 @@ def _create_procurement_tables() -> None:
         sa.Column("allocated_base_quantity", sa.Numeric(18, 4), nullable=False),
         sa.CheckConstraint("allocated_base_quantity >= 0"),
         sa.CheckConstraint(
-            "delivery_schedule_id is not null or allocation_bucket = 'line_residual'"
+            "(allocation_bucket = 'line_residual' and delivery_schedule_id is null) "
+            "or (allocation_bucket <> 'line_residual' and delivery_schedule_id is not null)"
         ),
         sa.UniqueConstraint("receipt_transaction_id", "allocation_sequence"),
     )
@@ -1455,6 +1456,88 @@ def _create_constraint_triggers() -> None:
         EXECUTE FUNCTION enforce_material_relationship_predecessor_closed();
         """
     )
+    op.execute(
+        """
+        CREATE FUNCTION enforce_receipt_allocation_line_consistency()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            receipt_line_id uuid;
+            schedule_line_id uuid;
+        BEGIN
+            IF NEW.delivery_schedule_id IS NULL THEN
+                RETURN NEW;
+            END IF;
+
+            SELECT po_line_id
+            INTO receipt_line_id
+            FROM receipt_transactions
+            WHERE id = NEW.receipt_transaction_id;
+
+            SELECT po_line_id
+            INTO schedule_line_id
+            FROM delivery_schedules
+            WHERE id = NEW.delivery_schedule_id;
+
+            IF receipt_line_id IS DISTINCT FROM schedule_line_id THEN
+                RAISE EXCEPTION 'receipt allocation schedule must belong to receipt po line'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_receipt_allocation_line_consistency
+        AFTER INSERT OR UPDATE OF receipt_transaction_id, delivery_schedule_id
+        ON receipt_allocations
+        DEFERRABLE INITIALLY IMMEDIATE
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_receipt_allocation_line_consistency();
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION enforce_supplier_commitment_schedule_line_consistency()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            schedule_line_id uuid;
+        BEGIN
+            IF NEW.delivery_schedule_id IS NULL THEN
+                RETURN NEW;
+            END IF;
+
+            SELECT po_line_id
+            INTO schedule_line_id
+            FROM delivery_schedules
+            WHERE id = NEW.delivery_schedule_id;
+
+            IF NEW.po_line_id IS DISTINCT FROM schedule_line_id THEN
+                RAISE EXCEPTION 'supplier commitment schedule must belong to commitment po line'
+                    USING ERRCODE = '23514';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $$;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_supplier_commitment_schedule_line_consistency
+        AFTER INSERT OR UPDATE OF po_line_id, delivery_schedule_id
+        ON supplier_commitment_observations
+        DEFERRABLE INITIALLY IMMEDIATE
+        FOR EACH ROW
+        EXECUTE FUNCTION enforce_supplier_commitment_schedule_line_consistency();
+        """
+    )
 
 
 def downgrade() -> None:
@@ -1463,6 +1546,10 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS enforce_material_relationship_predecessor_closed() CASCADE")
     op.execute("DROP FUNCTION IF EXISTS enforce_successor_predecessor_closed() CASCADE")
     op.execute("DROP FUNCTION IF EXISTS enforce_material_approval_independence() CASCADE")
+    op.execute("DROP FUNCTION IF EXISTS enforce_receipt_allocation_line_consistency() CASCADE")
+    op.execute(
+        "DROP FUNCTION IF EXISTS enforce_supplier_commitment_schedule_line_consistency() CASCADE"
+    )
     tables = [
         "notification_events",
         "episode_relationships",

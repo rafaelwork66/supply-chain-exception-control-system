@@ -57,3 +57,11 @@ Decision: immutable event envelopes carry explicit `idempotency_key` values uniq
 Reason: `correlation_id` is trace metadata and must not be overloaded as an idempotency control.
 
 Database control: unique constraint on `(episode_id, idempotency_key)`.
+
+## SDL-008: Schedule Line Consistency
+
+Decision: receipt allocations and supplier commitments may reference a delivery schedule only when that schedule belongs to the same canonical PO line.
+
+Reason: ordinary foreign keys can prove that the receipt, commitment, and schedule rows exist, but they cannot compare `receipt_transactions.po_line_id` or `supplier_commitment_observations.po_line_id` with `delivery_schedules.po_line_id` without duplicating columns or using a cross-table control.
+
+Database controls: `trg_receipt_allocation_line_consistency`, `trg_supplier_commitment_schedule_line_consistency`, and the allocation bucket check requiring exactly one of schedule allocation or line-residual allocation.
