@@ -1,0 +1,2 @@
+id,run_reference,run_type,trigger_type,status,started_at,finished_at,release_version,configuration_hash,is_publication_eligible
+2d804c1b-f352-5c44-9654-aef7b3aceecc,SYN-GEN-1.0.0-20260720-2026-06-30,synthetic_generation,manual,success,2026-06-30T18:00:00+10:00,2026-06-30T18:00:00+10:00,1.0.0,01080ca88b03e6da7c7f9b61509216c547e0b24e9ff20351c050c4fe97adeb32,false

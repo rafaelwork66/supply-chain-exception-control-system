@@ -1,0 +1,87 @@
+{
+  "row_counts": {
+    "calendar_versions": 1,
+    "delivery_schedules": 363,
+    "demand_requirements": 320,
+    "future_receipt_outcomes": 34,
+    "inventory_snapshots": 81,
+    "ownership_mappings": 8,
+    "pipeline_runs": 1,
+    "product_site_inventory_policies": 80,
+    "product_versions": 40,
+    "products": 40,
+    "purchase_order_line_aliases": 260,
+    "purchase_order_line_versions": 282,
+    "purchase_order_lines": 260,
+    "purchase_order_versions": 103,
+    "purchase_orders": 103,
+    "receipt_allocations": 432,
+    "receipt_transactions": 339,
+    "rule_versions": 1,
+    "scenario_assignments": 123,
+    "scenario_registry": 123,
+    "sites": 2,
+    "source_loads": 6,
+    "source_systems": 1,
+    "supplier_commitment_observations": 227,
+    "supplier_performance_snapshots": 24,
+    "supplier_versions": 12,
+    "suppliers": 12,
+    "synthetic_outcome_observations": 260,
+    "uom_conversions": 120,
+    "users": 21
+  },
+  "open_line_count": 30,
+  "scenario_counts": {
+    "demand_shock": 16,
+    "split_schedule": 55,
+    "missing_supplier_signal": 22,
+    "missing_inventory_signal": 11,
+    "supplier_deterioration": 12,
+    "receipt_reversal": 1,
+    "supplier_commitment_breach": 1,
+    "receipt_correction": 1,
+    "inventory_reallocation_opportunity": 1,
+    "false_positive_source_data_correction": 1,
+    "overdue_critical_order": 1,
+    "partial_receipt_remaining_exposure": 1
+  },
+  "outcome_opportunity_counts": {
+    "true_negative_opportunity": 164,
+    "true_positive_opportunity": 30,
+    "false_positive_opportunity": 37,
+    "false_negative_opportunity": 29
+  },
+  "lines_by_site": {
+    "MEL-DC": 128,
+    "GEEL-MFG": 132
+  },
+  "lines_by_product_category": {
+    "resale_finished_goods": 108,
+    "components": 119,
+    "mro_consumables": 24,
+    "packaging": 9
+  },
+  "status_distribution": {
+    "closed": 224,
+    "cancelled": 6,
+    "open": 29,
+    "on_hold": 1
+  },
+  "split_schedule_rate": 0.2115,
+  "partial_receipt_rate": 0.1885,
+  "late_receipt_rate": 0.469,
+  "correction_reversal_rate": 0.0177,
+  "missing_supplier_signal_count": 22,
+  "missing_inventory_signal_count": 13,
+  "missing_signal_count": 35,
+  "missing_signal_rate": 0.1346,
+  "outcome_distribution": {
+    "none": 201,
+    "moderate": 35,
+    "low": 20,
+    "severe": 4
+  },
+  "passed": true,
+  "errors": []
+}

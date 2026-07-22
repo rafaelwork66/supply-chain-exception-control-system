@@ -1,0 +1,22 @@
+id,user_code,display_name,role_classification,actor_type,active_from,active_to,synthetic_data_flag
+5273e3a9-6493-5397-9383-8bc64b4594eb,BUYER-01,Synthetic Buyer 01,buyer,human,2024-07-01T09:00:00+10:00,,true
+f655f9fd-9958-56fc-b3e5-0da207114e55,BUYER-02,Synthetic Buyer 02,buyer,human,2024-07-01T09:00:00+10:00,,true
+34058914-b431-55a1-927a-a6146c6135fd,BUYER-03,Synthetic Buyer 03,buyer,human,2024-07-01T09:00:00+10:00,,true
+5793a517-e520-5427-bb30-aa38c3dae60b,BUYER-04,Synthetic Buyer 04,buyer,human,2024-07-01T09:00:00+10:00,,true
+4524351e-0f12-5cff-a071-8a936ce0e93f,BUYER-05,Synthetic Buyer 05,buyer,human,2024-07-01T09:00:00+10:00,,true
+61c15f7b-2ecd-554e-97bf-484a9aab7265,BUYER-06,Synthetic Buyer 06,buyer,human,2024-07-01T09:00:00+10:00,,true
+0670d1a8-e7b8-563c-bdde-6042abe4b3c1,BUYER-07,Synthetic Buyer 07,buyer,human,2024-07-01T09:00:00+10:00,,true
+3f5912ca-bd6f-5930-8695-b55178ed1713,BUYER-08,Synthetic Buyer 08,buyer,human,2024-07-01T09:00:00+10:00,,true
+d8ab24ca-cc78-5373-8241-b91ef5bd9eb1,PLANNER-01,Synthetic Planner 01,planner,human,2024-07-01T09:00:00+10:00,,true
+6d90adb4-c7b8-563c-a5b1-392db721febe,PLANNER-02,Synthetic Planner 02,planner,human,2024-07-01T09:00:00+10:00,,true
+0ae53ada-def6-50bb-8f6a-2f0e0fb0d0da,PLANNER-03,Synthetic Planner 03,planner,human,2024-07-01T09:00:00+10:00,,true
+cd0d262a-3151-5def-b24c-22bf0ad584a8,PLANNER-04,Synthetic Planner 04,planner,human,2024-07-01T09:00:00+10:00,,true
+646a0043-b02b-5cdb-8f30-4d3b90090376,PLANNER-05,Synthetic Planner 05,planner,human,2024-07-01T09:00:00+10:00,,true
+170913dc-6b61-5f92-944a-c90fe7af8636,PLANNER-06,Synthetic Planner 06,planner,human,2024-07-01T09:00:00+10:00,,true
+b60b3aff-2ca3-51b4-b0ff-0f7cf0c81589,SUPPLY_CHAIN_MANAGER-01,Synthetic Supply Chain Manager 01,supply_chain_manager,human,2024-07-01T09:00:00+10:00,,true
+cb3e74d2-4603-5d05-a840-4f36b377d9c5,SUPPLY_CHAIN_MANAGER-02,Synthetic Supply Chain Manager 02,supply_chain_manager,human,2024-07-01T09:00:00+10:00,,true
+f4dad7a3-4c54-5826-9f99-3c9db0e386a2,SUPPLY_CHAIN_MANAGER-03,Synthetic Supply Chain Manager 03,supply_chain_manager,human,2024-07-01T09:00:00+10:00,,true
+7a53ad0a-c909-52ee-b709-8e406591ca1c,DATA_QUALITY_ANALYST-01,Synthetic Data Quality Analyst 01,data_quality_analyst,human,2024-07-01T09:00:00+10:00,,true
+5b337a92-7c8e-52ee-835e-b736f5c4cc15,DATA_QUALITY_ANALYST-02,Synthetic Data Quality Analyst 02,data_quality_analyst,human,2024-07-01T09:00:00+10:00,,true
+3af8c16d-65fa-521e-99fb-2841e70251e5,PROCUREMENT_QUEUE,Synthetic Procurement Queue,queue,queue,2024-07-01T09:00:00+10:00,,true
+119fffe1-01dc-516f-89c8-c5a33a5a4bc5,PLANNING_QUEUE,Synthetic Planning Queue,queue,queue,2024-07-01T09:00:00+10:00,,true

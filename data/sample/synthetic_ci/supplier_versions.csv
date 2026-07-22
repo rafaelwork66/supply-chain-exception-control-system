@@ -1,0 +1,13 @@
+id,supplier_id,display_name,supplier_category,effective_from,effective_to,synthetic_data_flag
+eaad8306-6644-5e2f-9b18-01a11dd8490e,b019f662-4041-56d7-947a-ad0e19cbf3e5,Synthetic Supplier 0001,interstate,2024-07-01T09:00:00+10:00,,true
+52d83e20-d409-5540-8e89-8cb2f5df7943,f4263488-fb38-5a77-9b7d-bc1a9c185d5c,Synthetic Supplier 0002,local,2024-07-01T09:00:00+10:00,,true
+90ccf688-8d16-5635-be00-06ce5b1a50ad,69943b6b-c286-5006-bfa5-bce4290c448f,Synthetic Supplier 0003,interstate,2024-07-01T09:00:00+10:00,,true
+22eebef5-d045-5819-a43e-0b622bae7f94,bd21beb4-4051-594d-8000-d00192519578,Synthetic Supplier 0004,import,2024-07-01T09:00:00+10:00,,true
+efa7b264-3671-5c87-ba09-6b13b5c8b319,6ab50693-de7e-5ce4-a00c-1129c9838c2f,Synthetic Supplier 0005,import,2024-07-01T09:00:00+10:00,,true
+cd12131c-62a6-5f19-8dec-dec479f17f3d,c77963d8-1c44-520a-be00-9efc062d21d4,Synthetic Supplier 0006,import,2024-07-01T09:00:00+10:00,,true
+aa56954e-e5cf-5f88-bfb6-b9123078c926,4c9dd6bc-d4bf-53c9-872b-90b23ec8d5d5,Synthetic Supplier 0007,import,2024-07-01T09:00:00+10:00,,true
+5a0859a1-2b8f-578d-8fce-de614db0d939,4bd49743-3f53-57b7-bbc5-6dab27206f37,Synthetic Supplier 0008,local,2024-07-01T09:00:00+10:00,,true
+f6661966-047a-5822-a9a5-340edc076719,8da861a0-52e8-5625-b430-3a22414d79fb,Synthetic Supplier 0009,local,2024-07-01T09:00:00+10:00,,true
+979937c1-de7a-55e8-b344-490aa573d04d,58bb201a-b67a-5aa2-81e1-29ab62d99704,Synthetic Supplier 0010,import,2024-07-01T09:00:00+10:00,,true
+e6866a7c-a1fc-5628-a2ae-018643e3f37d,cc4ca321-02fa-50eb-8b86-5ba3c42b8ceb,Synthetic Supplier 0011,import,2024-07-01T09:00:00+10:00,,true
+6d687671-d325-58c0-85dc-5e33ac9f6b37,938a277e-f12b-5e70-8354-56b03a77ce45,Synthetic Supplier 0012,interstate,2024-07-01T09:00:00+10:00,,true

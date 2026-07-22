@@ -1,0 +1,7 @@
+{
+  "duration_seconds": 0.3445,
+  "output_path": "data\\sample\\synthetic_ci",
+  "po_line_count": 260,
+  "profile": "ci",
+  "target_open_line_count": 30
+}

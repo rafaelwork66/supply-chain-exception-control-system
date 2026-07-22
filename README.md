@@ -47,6 +47,7 @@ supply-chain-exception-control-system/
 - Mypy type checking
 - GitHub Actions CI workflow with a PostgreSQL service container
 - Safe `.env.example` file without secrets
+- Deterministic synthetic source-data generator with a small committed sample fixture
 
 ## Windows PowerShell Setup
 
@@ -145,6 +146,13 @@ Physical schema support documents:
 - `docs/design/schema_decision_log.md`
 - `docs/design/schema_summary.mmd`
 
+Synthetic data support documents:
+
+- `docs/synthetic_data_generator.md`
+- `docs/synthetic_data_dictionary.md`
+- `docs/synthetic_generation_decisions.md`
+- `docs/synthetic_quality_report.md`
+
 ## Alembic Migrations
 
 Alembic is configured for PostgreSQL. The first migration creates the physical schema only; it does not implement business rules, lifecycle services, scoring services, notification sending, or AI.
@@ -195,6 +203,28 @@ Run type checking:
 ```powershell
 python -m mypy src tests
 ```
+
+## Synthetic Source Data
+
+The synthetic generator creates deterministic, portfolio-safe source datasets for later ingestion work. It does not implement risk scoring, candidate-risk evaluation, exception creation, lifecycle services, Streamlit, notifications, Power BI or AI.
+
+Generate the small CI-sized sample fixture:
+
+```powershell
+python -m scecs.synthetic.cli generate --profile ci --output data/sample/synthetic_ci
+python -m scecs.synthetic.cli validate --profile ci --output data/sample/synthetic_ci
+python -m scecs.synthetic.cli summarise --profile ci --output data/sample/synthetic_ci
+```
+
+Generate the full portfolio baseline locally:
+
+```powershell
+python -m scecs.synthetic.cli generate --profile portfolio --output data/generated/portfolio_baseline
+python -m scecs.synthetic.cli validate --profile portfolio --output data/generated/portfolio_baseline
+python -m scecs.synthetic.cli summarise --profile portfolio --output data/generated/portfolio_baseline --write-doc docs/synthetic_quality_report.md
+```
+
+`data/generated/` is ignored by Git. Do not commit full generated datasets unless explicitly approved.
 
 Verify package installation from a clean checkout:
 

@@ -40,3 +40,5 @@ dist/
 # Data outputs
 data/rejected/*
 !data/rejected/.gitkeep
+data/generated/
+data/full/
