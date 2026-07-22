@@ -1,0 +1,41 @@
+id,product_id,description,category,base_uom,handling_precision,abc_class,xyz_class,effective_from,effective_to,synthetic_data_flag
+74e2170b-2182-54b5-8a30-7d2513f79d48,809cf264-7def-5354-9470-0a2384ba5a22,Synthetic components item 00001,components,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+4772589a-1740-5a50-8f3d-d49baa73a493,a7d6c9e4-45c8-576f-87b5-1b26791e19d6,Synthetic resale finished goods item 00002,resale_finished_goods,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+5f8f5488-5e15-5369-beba-a17436d9c994,c893506d-df7e-55aa-9afa-b952b5e81a69,Synthetic components item 00003,components,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+7596d709-a681-59c7-8505-213725c1c191,fe8d9660-d333-56ab-a5ca-bb18ef310089,Synthetic components item 00004,components,EA,4,A,Y,2024-07-01T09:00:00+10:00,,true
+7e64a995-5a84-5498-9ab8-8f0e5bd950d2,83051d14-4fa3-53bd-ac60-523a406fc21f,Synthetic resale finished goods item 00005,resale_finished_goods,EA,4,B,Y,2024-07-01T09:00:00+10:00,,true
+06f9c70d-c567-5e26-aa54-0912efd09e6f,9de01ee7-8a99-53e4-9894-1eb2457782be,Synthetic resale finished goods item 00006,resale_finished_goods,EA,4,A,Y,2024-07-01T09:00:00+10:00,,true
+be9b5971-8a87-57b2-9975-85066e619dfd,0ddb5f45-3bf7-5460-a1dc-4b0097c4c8d6,Synthetic mro consumables item 00007,mro_consumables,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+4189f4c7-72b8-58a8-affd-2452514719d1,fadf08a0-1d4f-563b-bd91-b87b31f373eb,Synthetic resale finished goods item 00008,resale_finished_goods,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+2a26dcc9-cc9a-5a82-9750-dc8ce35604ad,f6f9c5be-111c-512f-b859-607b24323b36,Synthetic resale finished goods item 00009,resale_finished_goods,EA,4,A,X,2024-07-01T09:00:00+10:00,,true
+d565037b-013b-5902-b17a-c85cdaa71aae,36da40b4-9e68-5588-9074-f6f8ee0422d2,Synthetic resale finished goods item 00010,resale_finished_goods,EA,4,C,Y,2024-07-01T09:00:00+10:00,,true
+c9aea6d9-b526-5e26-8d58-dce7d160b801,f3239f2c-2ddf-5cd9-8fe5-d2d009ee11fc,Synthetic components item 00011,components,EA,4,A,Z,2024-07-01T09:00:00+10:00,,true
+d0676576-b61e-56b8-9560-aaa0e58daa0e,0856837c-6661-582a-8826-9267d93a18a5,Synthetic components item 00012,components,EA,4,A,X,2024-07-01T09:00:00+10:00,,true
+5030e620-988f-561a-8aa1-ab11627e90a6,381d75e6-fb26-5f96-9820-6bdce61f0879,Synthetic components item 00013,components,EA,4,B,Y,2024-07-01T09:00:00+10:00,,true
+3134c111-21a0-57dc-8e61-321c1394eaf1,e6a7fc53-496a-5ae2-a882-4d4bf1223c4c,Synthetic components item 00014,components,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+de0e9639-64b0-5245-8e65-af1f8eff9f0e,bba8ffc9-9e7c-5b77-a53d-ae09beffb73b,Synthetic mro consumables item 00015,mro_consumables,EA,4,B,Y,2024-07-01T09:00:00+10:00,,true
+4eaa18c7-9824-50b4-a696-2b358a66813e,733a52f6-ddae-5ec5-a1d3-e06d5ca3460e,Synthetic resale finished goods item 00016,resale_finished_goods,EA,4,C,Y,2024-07-01T09:00:00+10:00,,true
+789157b6-baf2-5766-ba45-0d2b6be83431,ce149183-f698-5b38-9d6f-47394dafce45,Synthetic resale finished goods item 00017,resale_finished_goods,EA,4,C,Y,2024-07-01T09:00:00+10:00,,true
+40df9713-73b5-55ba-9c5f-505abdd96a7e,1f4d4772-a022-5cfc-a96e-04c7ad0d1a55,Synthetic components item 00018,components,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+f52d07be-3309-5472-923d-4bc616a9eb35,b94cba32-e7de-5d7c-afea-23fba919ed21,Synthetic resale finished goods item 00019,resale_finished_goods,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+420df77c-5ef6-5a81-b85a-16ca168b886d,943fffff-3f21-52fd-a307-b259a6fef658,Synthetic resale finished goods item 00020,resale_finished_goods,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+d8af5adb-670a-5832-9be9-c3dc734c0c3f,f8133fbe-749f-5b84-a762-a62025fd96d1,Synthetic components item 00021,components,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+884e7f7a-7f5b-5387-9362-6aad268dd721,c3f298ca-9a69-574b-b887-cd9160b10d7e,Synthetic packaging item 00022,packaging,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+f230490f-9e94-5d56-9e1b-5dd5d98449d7,845990f3-480b-5068-96a7-56555c9bfded,Synthetic resale finished goods item 00023,resale_finished_goods,EA,4,C,Y,2024-07-01T09:00:00+10:00,,true
+6171b4aa-da8e-5f66-9429-36456878832a,3d05cb9b-d5a0-53d8-84f5-a6128827eb81,Synthetic components item 00024,components,EA,4,A,Z,2024-07-01T09:00:00+10:00,,true
+5684d252-90cb-5325-9ce6-db0d44b1d937,2bc50dec-b057-52d9-bb68-4422b67e6c08,Synthetic mro consumables item 00025,mro_consumables,EA,4,A,X,2024-07-01T09:00:00+10:00,,true
+a9eafd65-5221-56d5-893b-cde004ea5b49,156f1b61-81f0-5bee-8acc-b26bfd4d94be,Synthetic components item 00026,components,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+d48614d2-a2f6-5cf3-8de6-5edf225ede97,3260e462-15f7-59e3-a229-c6e4260bb97a,Synthetic mro consumables item 00027,mro_consumables,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+cfb20b17-a590-5f8e-ad75-ce972c08e2fc,e7ae4d79-bd0e-5dd7-b736-930307e54235,Synthetic resale finished goods item 00028,resale_finished_goods,EA,4,C,Z,2024-07-01T09:00:00+10:00,,true
+d51f1265-0205-5ad6-a856-b7fa57ebe646,802e4010-8aa6-5fb1-bc87-5f2947921061,Synthetic components item 00029,components,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+6840c467-e676-5c5e-984b-8c175cbbd5a7,1d765b5d-108b-588d-90bf-0a5f7c702f58,Synthetic resale finished goods item 00030,resale_finished_goods,EA,4,C,X,2024-07-01T09:00:00+10:00,,true
+83d84d3c-bf7a-5a8a-9809-64f4051ebac1,73ffaed7-94be-55a5-afed-0d1e98f52b44,Synthetic components item 00031,components,EA,4,A,Z,2024-07-01T09:00:00+10:00,,true
+e5caf8e1-4f15-534b-a872-c3ac8ee5f0c5,26f9d7d6-f6e5-5f66-b038-c4074cf38cff,Synthetic components item 00032,components,EA,4,C,Z,2024-07-01T09:00:00+10:00,,true
+e7268ad6-21f7-59c7-9e28-5ed0d6ebab9c,258787f4-7c2c-53a6-b106-204498b26f2f,Synthetic components item 00033,components,EA,4,C,Z,2024-07-01T09:00:00+10:00,,true
+9714741a-5ab5-593b-abe5-4cea28ecf362,13c36a28-138e-592b-89a5-f58427ce5201,Synthetic components item 00034,components,EA,4,B,Y,2024-07-01T09:00:00+10:00,,true
+4f2fd4ff-6514-5c1b-a19b-b4e3fdde637e,b57530b6-83a1-5572-a798-20246dda47c5,Synthetic packaging item 00035,packaging,EA,4,B,X,2024-07-01T09:00:00+10:00,,true
+b78c1665-abf7-5609-b056-b136151ee3ce,23303b4e-f08b-5648-a6a2-f350ebc5143c,Synthetic resale finished goods item 00036,resale_finished_goods,EA,4,B,Z,2024-07-01T09:00:00+10:00,,true
+fed4c17e-3520-5178-a261-74edafd66adc,fb68c10a-55c0-5d65-85fe-0d8330c7d0e5,Synthetic components item 00037,components,EA,4,B,Z,2024-07-01T09:00:00+10:00,,true
+eb143c37-2e46-5a74-a7dc-e7df7f2909b8,9b4cace9-899f-537b-b7be-bed7f160dcf2,Synthetic resale finished goods item 00038,resale_finished_goods,EA,4,A,Z,2024-07-01T09:00:00+10:00,,true
+a5332659-5dfd-5482-b917-5a884c2f5e23,d4b300ac-9c19-5617-8775-15b2fd6ecff3,Synthetic resale finished goods item 00039,resale_finished_goods,EA,4,B,Z,2024-07-01T09:00:00+10:00,,true
+99422388-98e1-53c0-80aa-2b4ccf87ae5e,5a2c36f8-ff5b-53d9-9352-fac73932d34f,Synthetic components item 00040,components,EA,4,C,X,2024-07-01T09:00:00+10:00,,true

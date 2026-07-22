@@ -1,0 +1,83 @@
+{
+  "row_counts": {
+    "calendar_versions": 1,
+    "delivery_schedules": 377,
+    "demand_requirements": 320,
+    "inventory_snapshots": 80,
+    "ownership_mappings": 8,
+    "pipeline_runs": 1,
+    "product_site_inventory_policies": 80,
+    "product_versions": 40,
+    "products": 40,
+    "purchase_order_line_aliases": 260,
+    "purchase_order_line_versions": 276,
+    "purchase_order_lines": 260,
+    "purchase_order_versions": 106,
+    "purchase_orders": 106,
+    "receipt_allocations": 363,
+    "receipt_transactions": 369,
+    "rule_versions": 1,
+    "scenario_assignments": 123,
+    "scenario_registry": 123,
+    "sites": 2,
+    "source_loads": 6,
+    "source_systems": 1,
+    "supplier_commitment_observations": 228,
+    "supplier_performance_snapshots": 24,
+    "supplier_versions": 12,
+    "suppliers": 12,
+    "synthetic_outcome_observations": 260,
+    "uom_conversions": 120,
+    "users": 21
+  },
+  "open_line_count": 30,
+  "scenario_counts": {
+    "demand_shock": 16,
+    "split_schedule": 55,
+    "missing_supplier_signal": 22,
+    "missing_inventory_signal": 11,
+    "supplier_deterioration": 12,
+    "receipt_reversal": 1,
+    "supplier_commitment_breach": 1,
+    "receipt_correction": 1,
+    "inventory_reallocation_opportunity": 1,
+    "false_positive_source_data_correction": 1,
+    "overdue_critical_order": 1,
+    "partial_receipt_remaining_exposure": 1
+  },
+  "outcome_opportunity_counts": {
+    "true_negative_opportunity": 185,
+    "true_positive_opportunity": 21,
+    "false_negative_opportunity": 20,
+    "false_positive_opportunity": 34
+  },
+  "lines_by_site": {
+    "MEL-DC": 130,
+    "GEEL-MFG": 130
+  },
+  "lines_by_product_category": {
+    "resale_finished_goods": 96,
+    "components": 129,
+    "packaging": 14,
+    "mro_consumables": 21
+  },
+  "status_distribution": {
+    "closed": 228,
+    "cancelled": 2,
+    "open": 27,
+    "on_hold": 3
+  },
+  "split_schedule_rate": 0.2115,
+  "partial_receipt_rate": 0.2269,
+  "late_receipt_rate": 0.4282,
+  "correction_reversal_rate": 0.0163,
+  "missing_signal_count": 13,
+  "outcome_distribution": {
+    "none": 219,
+    "moderate": 23,
+    "low": 15,
+    "severe": 3
+  },
+  "passed": true,
+  "errors": []
+}

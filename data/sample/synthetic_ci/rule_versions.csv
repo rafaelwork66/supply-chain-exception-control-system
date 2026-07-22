@@ -1,0 +1,2 @@
+id,rule_code,version,status,owner,rationale,approved_at,effective_from,effective_to
+71d6f104-e769-5cbb-b54f-35f6bcd52064,RPR_REFERENCE_ONLY,1.0.0,approved,Synthetic Governance,Reference metadata only; no scoring implemented by synthetic generator.,2024-07-01T08:30:00+10:00,2024-07-01T08:30:00+10:00,

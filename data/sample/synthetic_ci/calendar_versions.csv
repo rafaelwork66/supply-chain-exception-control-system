@@ -1,0 +1,2 @@
+id,calendar_code,version,timezone_name,business_hours,holiday_set,approved_at
+1f1c059f-279f-5de2-8df7-e6dfab862d53,MEL_BUSINESS,1.0,Australia/Melbourne,"{""mon-fri"":""08:30-17:00""}","{""jurisdiction"":""VIC"",""synthetic"":true}",2024-07-01T08:30:00+10:00
