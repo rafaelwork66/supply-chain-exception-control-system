@@ -27,7 +27,7 @@ The package lives under `src/scecs/synthetic/`.
 | `organisation.py` | Sites, users, ownership mappings, calendar and rule metadata references. |
 | `master_data.py` | Suppliers, product versions, inventory policies and UOM conversions. |
 | `purchase_orders.py` | PO headers, line identities, aliases, line versions and delivery schedules. |
-| `receipts.py` | Supplier commitments, receipts, corrections, reversals and allocations. |
+| `receipts.py` | Supplier commitments, as-of-visible receipts, future receipt realisations and allocations. |
 | `inventory.py` | Product-site inventory snapshots. |
 | `demand.py` | Dated firm and forecast demand requirements. |
 | `supplier_performance.py` | Historical supplier OTIF observations. |
@@ -63,6 +63,21 @@ For every line version, `base_quantity = ordered_quantity x conversion_factor`; 
 Every receipt, correction and reversal has allocation rows. Allocation quantities remain non-negative and reconcile to `ABS(receipt_transactions.base_quantity)`. The sign is represented by the receipt transaction, not by the allocation quantity. Schedule allocations are capped on a net signed basis; excess goes to `line_residual`.
 
 Demand and inventory are generated at product-site grain. When several PO-line scenarios share a product-site, those rows aggregate the relevant scenario UUIDs so each scenario remains traceable. Missing-inventory scenarios conflict with current inventory correction and reallocation scenarios at this grain, so incompatible missing-inventory assignments are removed before downstream generation.
+
+## As-Of Visibility Boundary
+
+The operational as-of timestamp is `2026-06-30T18:00:00+10:00` for the governed portfolio profile. Operational input files contain only information observable on or before that timestamp:
+
+- `receipt_transactions.posted_at` is at or before as-of.
+- `supplier_commitment_observations.observed_at` is at or before as-of.
+- PO header, PO-line and source-alias effective timestamps are at or before as-of.
+- `source_loads.extracted_at` and `source_loads.received_at` are at or before as-of.
+- `inventory_snapshots.snapshot_at` is at or before as-of.
+- `supplier_performance_snapshots` are calculated from operational receipts visible at as-of.
+
+Future planned business dates remain allowed when the information itself was known by as-of. Examples include need dates, expected delivery dates, requested dates, committed delivery dates, demand requirement dates and delivery schedule dates.
+
+Post-as-of receipt realisations are written to `future_receipt_outcomes.csv`. This file is evaluation-only, has no operational `source_load_id`, and is not included in the receipts source-load hash or row count. `synthetic_outcome_observations.csv` references those future receipt outcome IDs for open-line outcome evaluation.
 
 ## Commands
 

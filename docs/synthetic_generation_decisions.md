@@ -19,6 +19,9 @@
 | Generate supplier performance from receipt history with prior/noise. | Reconciles performance observations to generated history without making them perfectly predictive. |
 | Aggregate scenario UUIDs on product-site demand and inventory rows. | Demand and inventory are not PO-line-grain facts, so shared product-site scenarios need row-level UUID aggregation to remain traceable. |
 | Prune incompatible missing-inventory assignments. | Missing inventory means no current product-site inventory row, so it cannot coexist with correction or reallocation scenarios at that same product-site grain. |
+| Keep `receipt_transactions.csv` as an as-of-visible operational source. | Prevents future realised delivery events from leaking into future ingestion or risk-engine inputs. |
+| Export `future_receipt_outcomes.csv` as evaluation-only evidence. | Preserves post-as-of receipt realisations for outcome labels without grouping them into an operational source load. |
+| Build supplier performance from operational receipts only. | Supplier-performance features must reflect history visible at as-of, not hidden future realisations. |
 
 ## Deferred
 
@@ -39,4 +42,5 @@
 - Product-site inventory can contain separate stale, current and correction rows when multiple scenario types collide at the same product-site.
 - Supplier performance is reconciled against generated receipt history with latent priors and noise, so it is directional but not perfectly predictive.
 - Scenario injection changes operational facts and observations but does not prescribe future score or exception labels.
+- Future receipt realisations are generated at line level for evaluation, not as a full future receiving ledger.
 - The full-profile evidence is generated locally and stored as summary documentation; bulk CSVs remain ignored.

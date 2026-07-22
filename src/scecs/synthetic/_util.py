@@ -42,6 +42,12 @@ def timestamp_for(day: date, hour: int = 9, minute: int = 0) -> str:
     return f"{day.isoformat()}T{hour:02d}:{minute:02d}:00+10:00"
 
 
+def parse_timestamp(value: object) -> datetime:
+    """Parse an ISO timestamp value."""
+
+    return datetime.fromisoformat(str(value))
+
+
 def parse_date(value: object) -> date:
     """Parse an ISO date value."""
 

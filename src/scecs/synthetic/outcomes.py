@@ -16,10 +16,15 @@ def generate_outcomes(
     *,
     line_snapshots: list[LineSnapshot],
     hidden_supplier_archetypes: dict[str, str],
+    future_receipt_outcomes: list[Record],
 ) -> list[Record]:
     """Generate hidden outcome labels without reading risk scores or lifecycle state."""
 
     rows: list[Record] = []
+    future_receipts_by_line: dict[str, list[Record]] = {}
+    for receipt in future_receipt_outcomes:
+        if receipt["transaction_type"] == "receipt":
+            future_receipts_by_line.setdefault(str(receipt["po_line_id"]), []).append(receipt)
     lateness_probability = {"stable": 0.08, "average": 0.14, "volatile": 0.23, "fragile": 0.35}
     for line in line_snapshots:
         archetype = hidden_supplier_archetypes[line.supplier_id]
@@ -28,7 +33,13 @@ def generate_outcomes(
         probability += 0.18 if "supplier_deterioration" in scenarios else 0.0
         probability += 0.12 if "supplier_commitment_breach" in scenarios else 0.0
         probability += 0.09 if parse_date(line.need_date).month in {10, 11, 12} else 0.0
-        material_late = rng.random() < min(probability, 0.82)
+        future_receipts = future_receipts_by_line.get(line.po_line_id, [])
+        realised_late = any(str(receipt["late_receipt_flag"]) == "true" for receipt in future_receipts)
+        material_late = (
+            realised_late
+            if line.line_status in {"open", "on_hold"}
+            else rng.random() < min(probability, 0.82)
+        )
         stockout_probability = 0.04
         stockout_probability += 0.17 if "demand_shock" in scenarios else 0.0
         stockout_probability += 0.10 if "overdue_critical_order" in scenarios else 0.0
@@ -56,12 +67,14 @@ def generate_outcomes(
                 "material_late": "true" if material_late else "false",
                 "attributed_stockout": "true" if attributed_stockout else "false",
                 "adverse_baseline": "true" if adverse else "false",
-                "adverse_realised": "true" if adverse and rng.random() > 0.18 else "false",
+                "adverse_realised": "true" if adverse else "false",
                 "operational_impact": impact_level,
                 "residual_exposure_quantity": qty(residual),
                 "urgent_intervention_required": "true" if impact_level in {"moderate", "severe"} else "false",
                 "disruption_severity": impact_level,
                 "outcome_onset": date_iso(onset) if onset is not None else "",
+                "future_receipt_outcome_ids": ";".join(str(row["id"]) for row in future_receipts),
+                "realised_receipt_dates": ";".join(str(row["posted_at"])[:10] for row in future_receipts),
                 "observable_source_signal": "true" if observable_signal else "false",
                 "opportunity_class": _opportunity_class(adverse=adverse, observable_signal=observable_signal),
                 "scenario_ids": ";".join(line.scenario_ids),

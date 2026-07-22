@@ -102,6 +102,7 @@ def generate_dataset_bundle(config: SyntheticGeneratorConfig) -> GeneratedDatase
         random_context.stream("outcomes"),
         line_snapshots=line_snapshots,
         hidden_supplier_archetypes=hidden_supplier_archetypes,
+        future_receipt_outcomes=receipts["future_receipt_outcomes"],
     )
 
     datasets: DatasetMap = {

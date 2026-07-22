@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date
 from random import Random
 
-from scecs.synthetic._util import add_days, date_iso, parse_date, qty, stable_id, timestamp_for
+from scecs.synthetic._util import add_days, date_iso, parse_date, parse_timestamp, qty, stable_id, timestamp_for
 from scecs.synthetic.config import SyntheticGeneratorConfig
 from scecs.synthetic.purchase_orders import LineSnapshot
 from scecs.synthetic.types import DatasetMap, Record
@@ -48,6 +49,7 @@ def generate_receipts_and_commitments(
     schedule_by_id = {str(row["id"]): row for row in delivery_schedules}
     commitments: list[Record] = []
     receipts: list[Record] = []
+    future_receipts: list[Record] = []
     allocations: list[Record] = []
     receipt_sequence = 0
     schedule_remaining = {
@@ -66,6 +68,7 @@ def generate_receipts_and_commitments(
             committed_date = expected_date
             if "supplier_commitment_breach" in line.scenario_types:
                 committed_date = add_days(need_date, -2)
+            observed_day = min(add_days(need_date, -rng.randint(3, 20)), config.as_of_date)
             commitments.append(
                 {
                     "id": stable_id(config, "supplier_commitment", line.canonical_line_key),
@@ -76,7 +79,7 @@ def generate_receipts_and_commitments(
                     "committed_quantity": qty(line.base_quantity),
                     "committed_date": date_iso(committed_date),
                     "channel": "portal" if rng.random() < 0.75 else "email_extract",
-                    "observed_at": timestamp_for(add_days(need_date, -rng.randint(3, 20)), 10),
+                    "observed_at": timestamp_for(observed_day, 10),
                     "supersedes_commitment_id": "",
                     "scenario_ids": ";".join(line.scenario_ids),
                     "scenario_types": ";".join(line.scenario_types),
@@ -106,37 +109,35 @@ def generate_receipts_and_commitments(
             posted_day = add_days(expected_date, arrival_offset)
             if "supplier_deterioration" in line.scenario_types and posted_day <= need_date:
                 posted_day = add_days(need_date, rng.randint(2, 10))
+            posted_day = _cap_historical_posted_day(config, rng, line, posted_day)
             receipt_id = stable_id(config, "receipt_transaction", receipt_document)
             quantity = per_receipt
-            receipts.append(
-                {
-                    "id": receipt_id,
-                    "source_system_id": source_system_id,
-                    "source_load_id": source_load_id,
-                    "po_line_id": line.po_line_id,
-                    "receipt_document": receipt_document,
-                    "receipt_item_sequence": "1",
-                    "transaction_type": "receipt",
-                    "source_quantity": qty(quantity),
-                    "source_uom": "EA",
-                    "base_quantity": qty(quantity),
-                    "posted_at": timestamp_for(posted_day, 14, receipt_index),
-                    "corrects_receipt_id": "",
-                    "late_receipt_flag": "true" if posted_day > need_date else "false",
-                    "scenario_ids": ";".join(line.scenario_ids),
-                    "scenario_types": ";".join(line.scenario_types),
-                }
-            )
-
-            original_allocations = _allocate_receipt_quantity(
-                config,
+            receipt_row = _receipt_row(
+                source_system_id=source_system_id,
+                source_load_id=source_load_id,
                 receipt_id=receipt_id,
                 line=line,
+                receipt_document=receipt_document,
+                transaction_type="receipt",
                 quantity=quantity,
-                schedule_by_id=schedule_by_id,
-                schedule_remaining=schedule_remaining,
+                posted_at=timestamp_for(posted_day, 14, receipt_index),
+                corrects_receipt_id="",
+                late_receipt_flag=posted_day > need_date,
             )
-            allocations.extend(original_allocations)
+            original_allocations: list[Record] = []
+            if _is_as_of_visible(receipt_row["posted_at"], config):
+                receipts.append(receipt_row)
+                original_allocations = _allocate_receipt_quantity(
+                    config,
+                    receipt_id=receipt_id,
+                    line=line,
+                    quantity=quantity,
+                    schedule_by_id=schedule_by_id,
+                    schedule_remaining=schedule_remaining,
+                )
+                allocations.extend(original_allocations)
+            else:
+                future_receipts.append(_future_receipt_row(config, receipt_row, line))
 
             correction_scenario = "receipt_correction" in line.scenario_types
             reversal_scenario = "receipt_reversal" in line.scenario_types
@@ -146,72 +147,195 @@ def generate_receipts_and_commitments(
                 corrected_doc = f"{receipt_document}-COR"
                 correction_quantity = max(1.0, quantity * 0.02)
                 correction_id = stable_id(config, "receipt_transaction", corrected_doc)
-                receipts.append(
-                    {
-                        "id": correction_id,
-                        "source_system_id": source_system_id,
-                        "source_load_id": source_load_id,
-                        "po_line_id": line.po_line_id,
-                        "receipt_document": corrected_doc,
-                        "receipt_item_sequence": "1",
-                        "transaction_type": "correction",
-                        "source_quantity": qty(correction_quantity),
-                        "source_uom": "EA",
-                        "base_quantity": qty(correction_quantity),
-                        "posted_at": timestamp_for(add_days(posted_day, 1), 16),
-                        "corrects_receipt_id": receipt_id,
-                        "late_receipt_flag": "false",
-                        "scenario_ids": ";".join(line.scenario_ids),
-                        "scenario_types": ";".join(line.scenario_types),
-                    }
-                )
-                correction_allocations = _allocate_receipt_quantity(
-                    config,
+                correction_row = _receipt_row(
+                    source_system_id=source_system_id,
+                    source_load_id=source_load_id,
                     receipt_id=correction_id,
                     line=line,
+                    receipt_document=corrected_doc,
+                    transaction_type="correction",
                     quantity=correction_quantity,
-                    schedule_by_id=schedule_by_id,
-                    schedule_remaining=schedule_remaining,
-                    corrected_receipt_id=receipt_id,
+                    posted_at=timestamp_for(_cap_historical_posted_day(config, rng, line, add_days(posted_day, 1)), 16),
+                    corrects_receipt_id=receipt_id,
+                    late_receipt_flag=False,
                 )
-                allocations.extend(correction_allocations)
+                if _is_as_of_visible(correction_row["posted_at"], config):
+                    receipts.append(correction_row)
+                    correction_allocations = _allocate_receipt_quantity(
+                        config,
+                        receipt_id=correction_id,
+                        line=line,
+                        quantity=correction_quantity,
+                        schedule_by_id=schedule_by_id,
+                        schedule_remaining=schedule_remaining,
+                        corrected_receipt_id=receipt_id,
+                    )
+                    allocations.extend(correction_allocations)
+                else:
+                    future_receipts.append(_future_receipt_row(config, correction_row, line))
             if reversal_scenario or rng.random() < reversal_rate:
                 reversed_doc = f"{receipt_document}-REV"
                 reversal_id = stable_id(config, "receipt_transaction", reversed_doc)
-                receipts.append(
-                    {
-                        "id": reversal_id,
-                        "source_system_id": source_system_id,
-                        "source_load_id": source_load_id,
-                        "po_line_id": line.po_line_id,
-                        "receipt_document": reversed_doc,
-                        "receipt_item_sequence": "1",
-                        "transaction_type": "reversal",
-                        "source_quantity": qty(-quantity),
-                        "source_uom": "EA",
-                        "base_quantity": qty(-quantity),
-                        "posted_at": timestamp_for(add_days(posted_day, 2), 11),
-                        "corrects_receipt_id": receipt_id,
-                        "late_receipt_flag": "false",
-                        "scenario_ids": ";".join(line.scenario_ids),
-                        "scenario_types": ";".join(line.scenario_types),
-                    }
-                )
-                reversal_allocations = _reverse_original_allocations(
-                    config,
-                    reversal_id=reversal_id,
+                reversal_row = _receipt_row(
+                    source_system_id=source_system_id,
+                    source_load_id=source_load_id,
+                    receipt_id=reversal_id,
                     line=line,
-                    original_receipt_id=receipt_id,
-                    original_allocations=original_allocations,
-                    schedule_remaining=schedule_remaining,
+                    receipt_document=reversed_doc,
+                    transaction_type="reversal",
+                    quantity=-quantity,
+                    posted_at=timestamp_for(_cap_historical_posted_day(config, rng, line, add_days(posted_day, 2)), 11),
+                    corrects_receipt_id=receipt_id,
+                    late_receipt_flag=False,
                 )
-                allocations.extend(reversal_allocations)
+                if _is_as_of_visible(reversal_row["posted_at"], config):
+                    receipts.append(reversal_row)
+                    reversal_allocations = _reverse_original_allocations(
+                        config,
+                        reversal_id=reversal_id,
+                        line=line,
+                        original_receipt_id=receipt_id,
+                        original_allocations=original_allocations,
+                        schedule_remaining=schedule_remaining,
+                    )
+                    allocations.extend(reversal_allocations)
+                else:
+                    future_receipts.append(_future_receipt_row(config, reversal_row, line))
+
+    _ensure_open_line_future_receipts(
+        config,
+        rng,
+        line_snapshots=line_snapshots,
+        visible_receipts=receipts,
+        future_receipts=future_receipts,
+        hidden_supplier_archetypes=hidden_supplier_archetypes,
+    )
 
     return {
         "supplier_commitment_observations": commitments,
         "receipt_transactions": receipts,
         "receipt_allocations": allocations,
+        "future_receipt_outcomes": future_receipts,
     }
+
+
+def _receipt_row(
+    *,
+    source_system_id: str,
+    source_load_id: str,
+    receipt_id: str,
+    line: LineSnapshot,
+    receipt_document: str,
+    transaction_type: str,
+    quantity: float,
+    posted_at: str,
+    corrects_receipt_id: str,
+    late_receipt_flag: bool,
+) -> Record:
+    return {
+        "id": receipt_id,
+        "source_system_id": source_system_id,
+        "source_load_id": source_load_id,
+        "po_line_id": line.po_line_id,
+        "receipt_document": receipt_document,
+        "receipt_item_sequence": "1",
+        "transaction_type": transaction_type,
+        "source_quantity": qty(quantity),
+        "source_uom": "EA",
+        "base_quantity": qty(quantity),
+        "posted_at": posted_at,
+        "corrects_receipt_id": corrects_receipt_id,
+        "late_receipt_flag": "true" if late_receipt_flag else "false",
+        "scenario_ids": ";".join(line.scenario_ids),
+        "scenario_types": ";".join(line.scenario_types),
+    }
+
+
+def _cap_historical_posted_day(
+    config: SyntheticGeneratorConfig,
+    rng: Random,
+    line: LineSnapshot,
+    posted_day: date,
+) -> date:
+    if line.line_status in {"open", "on_hold"} or parse_date(posted_day) <= config.as_of_date:
+        return posted_day
+    need_date = parse_date(line.need_date)
+    if "supplier_deterioration" in line.scenario_types and need_date < config.as_of_date:
+        return min(config.as_of_date, add_days(need_date, rng.randint(2, 10)))
+    return add_days(config.as_of_date, -rng.randint(1, 30))
+
+
+def _future_receipt_row(config: SyntheticGeneratorConfig, receipt: Record, line: LineSnapshot) -> Record:
+    return {
+        "id": stable_id(config, "future_receipt_outcome", str(receipt["id"])),
+        "operational_receipt_id": "",
+        "po_line_id": receipt["po_line_id"],
+        "receipt_document": receipt["receipt_document"],
+        "receipt_item_sequence": receipt["receipt_item_sequence"],
+        "transaction_type": receipt["transaction_type"],
+        "source_quantity": receipt["source_quantity"],
+        "source_uom": receipt["source_uom"],
+        "base_quantity": receipt["base_quantity"],
+        "posted_at": receipt["posted_at"],
+        "corrects_receipt_id": receipt["corrects_receipt_id"],
+        "late_receipt_flag": receipt["late_receipt_flag"],
+        "need_date": line.need_date,
+        "evaluation_only_flag": "true",
+        "source_visibility": "post_as_of_hidden_realisation",
+        "scenario_ids": receipt["scenario_ids"],
+        "scenario_types": receipt["scenario_types"],
+    }
+
+
+def _is_as_of_visible(timestamp: object, config: SyntheticGeneratorConfig) -> bool:
+    return parse_timestamp(timestamp) <= parse_timestamp(config.as_of_timestamp)
+
+
+def _ensure_open_line_future_receipts(
+    config: SyntheticGeneratorConfig,
+    rng: Random,
+    *,
+    line_snapshots: list[LineSnapshot],
+    visible_receipts: list[Record],
+    future_receipts: list[Record],
+    hidden_supplier_archetypes: dict[str, str],
+) -> None:
+    future_line_ids = {str(row["po_line_id"]) for row in future_receipts if row["transaction_type"] == "receipt"}
+    visible_quantity_by_line: dict[str, float] = {}
+    for receipt in visible_receipts:
+        visible_quantity_by_line[str(receipt["po_line_id"])] = visible_quantity_by_line.get(
+            str(receipt["po_line_id"]),
+            0.0,
+        ) + float(str(receipt["base_quantity"]))
+    lateness_probability = {"stable": 0.08, "average": 0.14, "volatile": 0.23, "fragile": 0.35}
+    for line in line_snapshots:
+        if line.line_status not in {"open", "on_hold"} or line.po_line_id in future_line_ids:
+            continue
+        residual = max(1.0, line.base_quantity - visible_quantity_by_line.get(line.po_line_id, 0.0))
+        probability = lateness_probability[hidden_supplier_archetypes[line.supplier_id]]
+        probability += 0.18 if "supplier_deterioration" in line.scenario_types else 0.0
+        probability += 0.12 if "supplier_commitment_breach" in line.scenario_types else 0.0
+        posted_day = add_days(config.as_of_date, rng.randint(1, 21))
+        if rng.random() < min(probability, 0.82):
+            posted_day = max(posted_day, add_days(parse_date(line.need_date), rng.randint(1, 14)))
+        else:
+            posted_day = min(posted_day, parse_date(line.need_date))
+            if posted_day <= config.as_of_date:
+                posted_day = add_days(config.as_of_date, rng.randint(1, 7))
+        receipt_id = stable_id(config, "future_receipt_realisation", line.canonical_line_key)
+        receipt = _receipt_row(
+            source_system_id="",
+            source_load_id="",
+            receipt_id=receipt_id,
+            line=line,
+            receipt_document=f"REAL-{line.canonical_line_key}",
+            transaction_type="receipt",
+            quantity=residual,
+            posted_at=timestamp_for(posted_day, 15),
+            corrects_receipt_id="",
+            late_receipt_flag=posted_day > parse_date(line.need_date),
+        )
+        future_receipts.append(_future_receipt_row(config, receipt, line))
 
 
 def _allocate_receipt_quantity(

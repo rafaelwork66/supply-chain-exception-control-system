@@ -2,8 +2,10 @@
 
 import inspect
 from collections import Counter, defaultdict
+from copy import deepcopy
 from uuid import UUID
 
+from scecs.synthetic._util import parse_timestamp
 from scecs.synthetic.config import ci_config
 from scecs.synthetic.generator import generate_dataset_bundle
 from scecs.synthetic.outcomes import generate_outcomes
@@ -217,6 +219,128 @@ def test_receipt_allocations_reconcile_all_transaction_types_and_net_capacity() 
     assert line_residual_receipts
 
 
+def test_temporal_validation_allows_future_plans_but_rejects_future_observations() -> None:
+    """Future business dates are allowed only when the observation existed by as-of."""
+
+    config = ci_config()
+    bundle = generate_dataset_bundle(config)
+    datasets = deepcopy(bundle.datasets)
+    datasets["delivery_schedules"][0]["expected_date"] = "2026-07-15"
+    datasets["supplier_commitment_observations"][0]["committed_date"] = "2026-07-15"
+    datasets["supplier_commitment_observations"][0]["observed_at"] = config.as_of_timestamp
+
+    result = validate_dataset_bundle(datasets, config)
+
+    assert result.passed, result.errors
+
+    datasets["supplier_commitment_observations"][0]["observed_at"] = "2026-07-01T09:00:00+10:00"
+    result = validate_dataset_bundle(datasets, config)
+
+    assert not result.passed
+    assert any("supplier_commitment_observations.observed_at" in error for error in result.errors)
+
+
+def test_post_as_of_operational_receipt_is_rejected_and_future_receipts_are_evaluation_only() -> None:
+    """Operational receipts stop at T0; post-T0 realisations live in the evaluation dataset."""
+
+    config = ci_config()
+    bundle = generate_dataset_bundle(config)
+    as_of = parse_timestamp(config.as_of_timestamp)
+
+    assert bundle.datasets["future_receipt_outcomes"]
+    assert all(parse_timestamp(row["posted_at"]) <= as_of for row in bundle.datasets["receipt_transactions"])
+    assert all(parse_timestamp(row["posted_at"]) > as_of for row in bundle.datasets["future_receipt_outcomes"])
+    assert all("source_load_id" not in row for row in bundle.datasets["future_receipt_outcomes"])
+    assert all(row["evaluation_only_flag"] == "true" for row in bundle.datasets["future_receipt_outcomes"])
+
+    datasets = deepcopy(bundle.datasets)
+    datasets["receipt_transactions"][0]["posted_at"] = "2026-07-01T09:00:00+10:00"
+    result = validate_dataset_bundle(datasets, config)
+
+    assert not result.passed
+    assert any("receipt_transactions.posted_at" in error for error in result.errors)
+
+
+def test_future_realised_receipts_drive_open_line_outcomes_but_not_operational_inputs() -> None:
+    """Open-line outcomes should use hidden future receipts without leaking them into source receipts."""
+
+    config = ci_config()
+    bundle = generate_dataset_bundle(config)
+    final_versions = _final_versions_for_test(bundle.datasets["purchase_order_line_versions"])
+    operational_receipt_line_ids = {str(row["po_line_id"]) for row in bundle.datasets["receipt_transactions"]}
+    future_receipts_by_line = defaultdict(list)
+    for row in bundle.datasets["future_receipt_outcomes"]:
+        if row["transaction_type"] == "receipt":
+            future_receipts_by_line[str(row["po_line_id"])].append(row)
+    outcomes = {
+        str(row["po_line_id"]): row
+        for row in bundle.datasets["synthetic_outcome_observations"]
+    }
+
+    open_line_ids = [
+        line_id
+        for line_id, row in final_versions.items()
+        if str(row["line_status"]) in {"open", "on_hold"}
+    ]
+    assert open_line_ids
+    for line_id in open_line_ids:
+        assert future_receipts_by_line[line_id]
+        future_ids = {str(row["id"]) for row in future_receipts_by_line[line_id]}
+        outcome_ids = set(str(outcomes[line_id]["future_receipt_outcome_ids"]).split(";"))
+        assert future_ids.issubset(outcome_ids)
+        assert bool(operational_receipt_line_ids) is True
+        assert any(
+            str(row["late_receipt_flag"]) == "true" for row in future_receipts_by_line[line_id]
+        ) == (outcomes[line_id]["material_late"] == "true")
+
+
+def test_historical_receipts_remain_visible_and_supplier_performance_uses_operational_history() -> None:
+    """Closed-line history remains in operational receipts; future rows stay out of performance inputs."""
+
+    config = ci_config()
+    bundle = generate_dataset_bundle(config)
+    as_of = parse_timestamp(config.as_of_timestamp)
+    final_versions = _final_versions_for_test(bundle.datasets["purchase_order_line_versions"])
+    closed_line_ids = {
+        line_id
+        for line_id, row in final_versions.items()
+        if str(row["line_status"]) == "closed"
+    }
+
+    historical_receipts = [
+        row
+        for row in bundle.datasets["receipt_transactions"]
+        if str(row["po_line_id"]) in closed_line_ids and row["transaction_type"] == "receipt"
+    ]
+    assert historical_receipts
+    assert all(parse_timestamp(row["posted_at"]) <= as_of for row in historical_receipts)
+    assert all(
+        "source_load_id" not in row
+        for row in bundle.datasets["future_receipt_outcomes"]
+    )
+    assert validate_dataset_bundle(bundle.datasets, config).passed
+
+
+def test_missing_signal_summary_uses_types_and_flags_not_uuid_text() -> None:
+    """Missing-signal metrics should not search scenario UUID text."""
+
+    config = ci_config()
+    bundle = generate_dataset_bundle(config)
+    result = validate_dataset_bundle(bundle.datasets, config)
+    scenario_counts = Counter(str(row["scenario_type"]) for row in bundle.datasets["scenario_registry"])
+    missing_inventory_flags = sum(
+        1 for row in bundle.datasets["inventory_snapshots"] if row["missing_signal_flag"] == "true"
+    )
+
+    assert result.passed, result.errors
+    assert all("missing" not in str(row.get("scenario_ids", "")) for rows in bundle.datasets.values() for row in rows)
+    assert result.summary["missing_supplier_signal_count"] == scenario_counts["missing_supplier_signal"]
+    assert result.summary["missing_inventory_signal_count"] == missing_inventory_flags
+    assert result.summary["missing_signal_count"] == (
+        scenario_counts["missing_supplier_signal"] + missing_inventory_flags
+    )
+
+
 def test_outcomes_include_all_opportunity_classes_and_do_not_accept_score_inputs() -> None:
     """Outcome generation should remain independent from future risk-scoring code."""
 
@@ -230,3 +354,12 @@ def test_outcomes_include_all_opportunity_classes_and_do_not_accept_score_inputs
     assert counts["false_negative_opportunity"] > 0
     assert "score" not in signature.parameters
     assert "severity" not in signature.parameters
+
+
+def _final_versions_for_test(rows: list[Record]) -> dict[str, Record]:
+    latest: dict[str, Record] = {}
+    for row in rows:
+        line_id = str(row["po_line_id"])
+        if line_id not in latest or int(str(row["amendment_version"])) > int(str(latest[line_id]["amendment_version"])):
+            latest[line_id] = row
+    return latest

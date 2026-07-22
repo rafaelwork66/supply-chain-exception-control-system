@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from scecs.synthetic._util import parse_timestamp
 from scecs.synthetic.config import SyntheticGeneratorConfig
 from scecs.synthetic.types import DatasetMap, Record
 
@@ -41,6 +43,7 @@ def validate_dataset_bundle(datasets: DatasetMap, config: SyntheticGeneratorConf
     _validate_scenario_ids_exist(datasets, scenario_by_id, errors)
     _validate_po_supplier_consistency(datasets, errors)
     _validate_uom_and_value_reconciliation(datasets, errors)
+    _validate_temporal_visibility(datasets, config, errors)
     active_lines = [row for row in final_line_versions.values() if str(row["line_status"]) in {"open", "on_hold"}]
     summary["open_line_count"] = len(active_lines)
     tolerance = max(5, int(config.target_open_line_count * 0.05))
@@ -109,6 +112,7 @@ def validate_dataset_bundle(datasets: DatasetMap, config: SyntheticGeneratorConf
     if missing_scenarios:
         errors.append(f"Missing scenario types: {', '.join(missing_scenarios)}.")
     _validate_scenario_behaviour(datasets, config, scenario_by_id, errors)
+    _validate_outcome_consistency(datasets, errors)
     _validate_supplier_performance_consistency(datasets, errors)
 
     outcome_classes = Counter(str(row["opportunity_class"]) for row in datasets["synthetic_outcome_observations"])
@@ -171,6 +175,8 @@ def _validate_major_foreign_keys(datasets: DatasetMap, errors: list[str]) -> Non
             _require_fk(row, "source_load_id", source_load_ids, dataset_name, errors)
             _require_fk(row, "product_id", product_ids, dataset_name, errors)
             _require_fk(row, "site_id", site_ids, dataset_name, errors)
+    for row in datasets.get("future_receipt_outcomes", []):
+        _require_fk(row, "po_line_id", line_ids, "future_receipt_outcomes", errors)
 
 
 def _require_fk(row: Record, field: str, valid_ids: set[str], dataset_name: str, errors: list[str]) -> None:
@@ -246,6 +252,55 @@ def _validate_uom_and_value_reconciliation(datasets: DatasetMap, errors: list[st
             errors.append(f"PO line version {row['id']} has inconsistent line value.")
 
 
+def _validate_temporal_visibility(
+    datasets: DatasetMap,
+    config: SyntheticGeneratorConfig,
+    errors: list[str],
+) -> None:
+    as_of = parse_timestamp(config.as_of_timestamp)
+    for row in datasets["source_loads"]:
+        _require_timestamp_not_after(row, "extracted_at", as_of, "source_loads", errors)
+        _require_timestamp_not_after(row, "received_at", as_of, "source_loads", errors)
+    for row in datasets["pipeline_runs"]:
+        _require_timestamp_not_after(row, "started_at", as_of, "pipeline_runs", errors)
+        _require_timestamp_not_after(row, "finished_at", as_of, "pipeline_runs", errors)
+    for row in datasets["purchase_order_versions"]:
+        _require_timestamp_not_after(row, "effective_at", as_of, "purchase_order_versions", errors)
+    for row in datasets["purchase_order_line_aliases"]:
+        _require_timestamp_not_after(row, "valid_from", as_of, "purchase_order_line_aliases", errors)
+    for row in datasets["purchase_order_line_versions"]:
+        _require_timestamp_not_after(row, "effective_at", as_of, "purchase_order_line_versions", errors)
+    for row in datasets["receipt_transactions"]:
+        _require_timestamp_not_after(row, "posted_at", as_of, "receipt_transactions", errors)
+    for row in datasets["supplier_commitment_observations"]:
+        _require_timestamp_not_after(row, "observed_at", as_of, "supplier_commitment_observations", errors)
+    for row in datasets["inventory_snapshots"]:
+        _require_timestamp_not_after(row, "snapshot_at", as_of, "inventory_snapshots", errors)
+    for row in datasets["supplier_performance_snapshots"]:
+        if str(row["as_of_date"]) > config.as_of_date.isoformat():
+            errors.append(f"Supplier performance {row['id']} has future as_of_date.")
+        if str(row["window_end"]) > config.as_of_date.isoformat():
+            errors.append(f"Supplier performance {row['id']} has future window_end.")
+    for row in datasets.get("future_receipt_outcomes", []):
+        if parse_timestamp(row["posted_at"]) <= as_of:
+            errors.append(f"Future receipt outcome {row['id']} is not after the as-of timestamp.")
+        if "source_load_id" in row and str(row["source_load_id"]):
+            errors.append(f"Future receipt outcome {row['id']} is linked to an operational source load.")
+        if str(row.get("evaluation_only_flag", "")) != "true":
+            errors.append(f"Future receipt outcome {row['id']} is not marked evaluation-only.")
+
+
+def _require_timestamp_not_after(
+    row: Record,
+    field: str,
+    as_of: datetime,
+    dataset_name: str,
+    errors: list[str],
+) -> None:
+    if parse_timestamp(row[field]) > as_of:
+        errors.append(f"{dataset_name}.{field} is after the configured as-of timestamp.")
+
+
 def _validate_receipt_allocation_reconciliation(datasets: DatasetMap, errors: list[str]) -> None:
     allocations_by_receipt: dict[str, list[Record]] = defaultdict(list)
     for allocation in datasets["receipt_allocations"]:
@@ -294,6 +349,9 @@ def _validate_scenario_behaviour(
     receipts_by_line: dict[str, list[Record]] = defaultdict(list)
     for receipt in datasets["receipt_transactions"]:
         receipts_by_line[str(receipt["po_line_id"])].append(receipt)
+    realised_receipts_by_line: dict[str, list[Record]] = defaultdict(list)
+    for receipt in datasets.get("future_receipt_outcomes", []):
+        realised_receipts_by_line[str(receipt["po_line_id"])].append(receipt)
     commitments_by_line: dict[str, list[Record]] = defaultdict(list)
     for commitment in datasets["supplier_commitment_observations"]:
         commitments_by_line[str(commitment["po_line_id"])].append(commitment)
@@ -324,7 +382,11 @@ def _validate_scenario_behaviour(
                 errors.append("partial_receipt_remaining_exposure did not leave positive residual exposure.")
         elif scenario_type == "supplier_commitment_breach":
             commitments = commitments_by_line[line_id]
-            receipts = [row for row in receipts_by_line[line_id] if row["transaction_type"] == "receipt"]
+            receipts = [
+                row
+                for row in receipts_by_line[line_id] + realised_receipts_by_line[line_id]
+                if row["transaction_type"] == "receipt"
+            ]
             committed_dates = [str(row["committed_date"]) for row in commitments if str(row["committed_date"])]
             receipt_dates = [str(row["posted_at"])[:10] for row in receipts]
             if not committed_dates or not receipt_dates or max(receipt_dates) <= min(committed_dates):
@@ -339,13 +401,13 @@ def _validate_scenario_behaviour(
         elif scenario_type == "receipt_correction":
             if not any(
                 row["transaction_type"] == "correction" and str(row["corrects_receipt_id"])
-                for row in receipts_by_line[line_id]
+                for row in receipts_by_line[line_id] + realised_receipts_by_line[line_id]
             ):
                 errors.append("receipt_correction did not create linked correction transaction.")
         elif scenario_type == "receipt_reversal":
             if not any(
                 row["transaction_type"] == "reversal" and str(row["corrects_receipt_id"])
-                for row in receipts_by_line[line_id]
+                for row in receipts_by_line[line_id] + realised_receipts_by_line[line_id]
             ):
                 errors.append("receipt_reversal did not create linked reversal transaction.")
         elif scenario_type == "split_schedule":
@@ -353,7 +415,11 @@ def _validate_scenario_behaviour(
             if len(schedules_by_line[line_id]) < 2 or round(schedule_total - float(str(line["base_quantity"])), 4) != 0:
                 errors.append("split_schedule did not create reconciling split schedules.")
         elif scenario_type == "supplier_deterioration":
-            receipts = [row for row in receipts_by_line[line_id] if row["transaction_type"] == "receipt"]
+            receipts = [
+                row
+                for row in receipts_by_line[line_id] + realised_receipts_by_line[line_id]
+                if row["transaction_type"] == "receipt"
+            ]
             if not any(row["late_receipt_flag"] == "true" for row in receipts):
                 errors.append("supplier_deterioration did not create worse delivery behaviour.")
         elif scenario_type == "inventory_reallocation_opportunity":
@@ -408,6 +474,46 @@ def _has_reallocation_effect(
         if any(float(str(row["available_quantity"])) > float(str(row["allocated_quantity"])) for row in other_rows):
             surplus = True
     return bool(affected_current and surplus)
+
+
+def _validate_outcome_consistency(datasets: DatasetMap, errors: list[str]) -> None:
+    final_lines = _final_line_versions(datasets["purchase_order_line_versions"])
+    future_receipts_by_line: dict[str, list[Record]] = defaultdict(list)
+    for receipt in datasets.get("future_receipt_outcomes", []):
+        if receipt["transaction_type"] == "receipt":
+            future_receipts_by_line[str(receipt["po_line_id"])].append(receipt)
+    outcome_by_line = {
+        str(row["po_line_id"]): row
+        for row in datasets["synthetic_outcome_observations"]
+    }
+    outcome_classes = Counter(str(row["opportunity_class"]) for row in outcome_by_line.values())
+    for line_id, line in final_lines.items():
+        outcome = outcome_by_line.get(line_id)
+        if outcome is None:
+            errors.append(f"Missing synthetic outcome for PO line {line_id}.")
+            continue
+        future_receipts = future_receipts_by_line.get(line_id, [])
+        if future_receipts and str(line["line_status"]) not in {"open", "on_hold"}:
+            errors.append(f"Future receipt realisation exists for non-open PO line {line_id}.")
+        if str(line["line_status"]) in {"open", "on_hold"} and not future_receipts:
+            errors.append(f"Open PO line {line_id} has no future receipt realisation.")
+            continue
+        if not future_receipts:
+            continue
+        future_late = any(str(row["late_receipt_flag"]) == "true" for row in future_receipts)
+        outcome_late = str(outcome["material_late"]) == "true"
+        if future_late != outcome_late:
+            errors.append(f"Outcome lateness contradicts future receipt realisation for PO line {line_id}.")
+        if future_late and str(outcome["operational_impact"]) == "none":
+            errors.append(f"Future late receipt has no delivery impact outcome for PO line {line_id}.")
+    for opportunity_class in (
+        "true_positive_opportunity",
+        "false_positive_opportunity",
+        "true_negative_opportunity",
+        "false_negative_opportunity",
+    ):
+        if outcome_classes[opportunity_class] == 0:
+            errors.append(f"No {opportunity_class} records generated after future-outcome alignment.")
 
 
 def _validate_supplier_performance_consistency(datasets: DatasetMap, errors: list[str]) -> None:
@@ -497,11 +603,12 @@ def build_distribution_summary(datasets: DatasetMap) -> dict[str, Any]:
     correction_reversal_count = sum(
         1 for row in datasets["receipt_transactions"] if row["transaction_type"] in {"correction", "reversal"}
     )
-    missing_signal_count = sum(
-        1
-        for row in datasets["supplier_commitment_observations"]
-        if str(row["scenario_ids"]).find("missing") >= 0
-    ) + sum(1 for row in datasets["inventory_snapshots"] if row["missing_signal_flag"] == "true")
+    scenario_counts = Counter(str(row["scenario_type"]) for row in datasets["scenario_registry"])
+    missing_supplier_signal_count = scenario_counts["missing_supplier_signal"]
+    missing_inventory_signal_count = sum(
+        1 for row in datasets["inventory_snapshots"] if row["missing_signal_flag"] == "true"
+    )
+    missing_signal_count = missing_supplier_signal_count + missing_inventory_signal_count
     outcome_distribution = Counter(
         str(row["operational_impact"]) for row in datasets["synthetic_outcome_observations"]
     )
@@ -515,7 +622,10 @@ def build_distribution_summary(datasets: DatasetMap) -> dict[str, Any]:
         "partial_receipt_rate": round(partial_line_count / line_count, 4),
         "late_receipt_rate": round(late_receipt_count / max(len(datasets["receipt_transactions"]), 1), 4),
         "correction_reversal_rate": round(correction_reversal_count / max(len(datasets["receipt_transactions"]), 1), 4),
+        "missing_supplier_signal_count": missing_supplier_signal_count,
+        "missing_inventory_signal_count": missing_inventory_signal_count,
         "missing_signal_count": missing_signal_count,
+        "missing_signal_rate": round(missing_signal_count / line_count, 4),
         "outcome_distribution": dict(outcome_distribution),
     }
 

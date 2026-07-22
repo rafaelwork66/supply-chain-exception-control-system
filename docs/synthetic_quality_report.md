@@ -8,9 +8,12 @@ This report describes generated synthetic portfolio data only. It does not repre
 - Profile: `portfolio`
 - Open line count: `1500`
 - Split-schedule rate: `0.2107`
-- Partial-receipt rate: `0.1919`
-- Late-receipt rate: `0.4959`
-- Correction/reversal rate: `0.0118`
+- Partial-receipt rate: `0.1866`
+- Late-receipt rate: `0.49`
+- Correction/reversal rate: `0.012`
+- Missing supplier signals: `3827`
+- Missing inventory signals: `1458`
+- Combined missing-signal rate: `0.0852`
 
 ## Target Comparison
 
@@ -22,17 +25,17 @@ This report describes generated synthetic portfolio data only. It does not repre
 | PO lines | at least 50,000 for portfolio profile | 62000 | Reported |
 | Open lines at snapshot | configured target | 1500 | Pass |
 | Split-schedule lines | 18-25% | 21.07% | Reported |
-| Lines with partial receipts | 15-25% | 19.19% | Reported |
-| Receipt corrections/reversals | 0.5-1.5% of receipt events | 1.18% | Reported |
+| Lines with partial receipts | 15-25% | 18.66% | Reported |
+| Receipt corrections/reversals | 0.5-1.5% of receipt events | 1.20% | Reported |
 | Outcome opportunity classes | TP, FP, TN and FN opportunities present | all present | Pass |
-| Late receipt rate | measured source-data evidence, no hard target in this work package | 49.59% | Reported |
+| Late receipt rate | measured source-data evidence, no hard target in this work package | 49.00% | Reported |
 
 ## Performance Evidence
 
 | Measure | Value |
 | --- | --- |
-| Generation duration | 48.4533 seconds |
-| Output size | 145384315 bytes |
+| Generation duration | 19.417 seconds |
+| Output size | 145459970 bytes |
 | Output path | `data\generated\portfolio_baseline` |
 | PO-line count | 62000 |
 
@@ -43,6 +46,7 @@ Performance values are simulated-project evidence from this local development ma
 - `calendar_versions`: 1
 - `delivery_schedules`: 88186
 - `demand_requirements`: 8000
+- `future_receipt_outcomes`: 1804
 - `inventory_snapshots`: 2001
 - `ownership_mappings`: 8
 - `pipeline_runs`: 1
@@ -54,15 +58,15 @@ Performance values are simulated-project evidence from this local development ma
 - `purchase_order_lines`: 62000
 - `purchase_order_versions`: 24018
 - `purchase_orders`: 24018
-- `receipt_allocations`: 111150
-- `receipt_transactions`: 85021
+- `receipt_allocations`: 110010
+- `receipt_transactions`: 83816
 - `rule_versions`: 1
 - `scenario_assignments`: 23610
 - `scenario_registry`: 23610
 - `sites`: 2
 - `source_loads`: 6
 - `source_systems`: 1
-- `supplier_commitment_observations`: 54671
+- `supplier_commitment_observations`: 54547
 - `supplier_performance_snapshots`: 240
 - `supplier_versions`: 120
 - `suppliers`: 120
@@ -87,7 +91,7 @@ Performance values are simulated-project evidence from this local development ma
 
 ## Outcome Opportunity Counts
 
-- `false_negative_opportunity`: 4322
-- `false_positive_opportunity`: 7937
-- `true_negative_opportunity`: 41893
-- `true_positive_opportunity`: 7848
+- `false_negative_opportunity`: 4515
+- `false_positive_opportunity`: 7932
+- `true_negative_opportunity`: 41144
+- `true_positive_opportunity`: 8409

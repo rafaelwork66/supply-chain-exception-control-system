@@ -25,8 +25,9 @@ All generated datasets are synthetic and portfolio-safe. CSV files are exported 
 | `purchase_order_line_versions.csv` | One PO-line amendment/version | Quantity, UOM, site, product, need date and status. |
 | `delivery_schedules.csv` | One delivery schedule component | Split schedules reconcile to PO-line base quantity. |
 | `supplier_commitment_observations.csv` | One supplier promise observation | May reference a delivery schedule from the same PO line. |
-| `receipt_transactions.csv` | One receipt, correction or reversal | Corrections and reversals append linked records. |
+| `receipt_transactions.csv` | One as-of-visible receipt, correction or reversal | Operational source input only; `posted_at` is at or before as-of. |
 | `receipt_allocations.csv` | One receipt allocation | Schedule allocations are line-consistent; line residual allocations have no schedule. |
+| `future_receipt_outcomes.csv` | One post-as-of receipt realisation | Evaluation-only future evidence; not linked to an operational source load. |
 | `inventory_snapshots.csv` | One product-site inventory snapshot | On-hand, allocated, available and in-transit quantities. |
 | `demand_requirements.csv` | One dated demand requirement | Firm and forecast demand with demand class evidence. |
 | `supplier_performance_snapshots.csv` | One supplier/site performance window | OTIF observations with sample sufficiency. |
@@ -72,3 +73,7 @@ The generator includes at least one instance of each mandatory scenario type:
 - `receipt_allocations.corrected_receipt_id` records inherited or explicit allocation target lineage for corrections and reversals.
 - `receipt_allocations.allocated_base_quantity` is always non-negative; the signed transaction effect comes from `receipt_transactions.base_quantity`.
 - `inventory_snapshots.corrects_snapshot_id` is populated for source-data correction scenarios.
+- Future business dates can appear in planning fields such as need date, expected date, committed date, schedule date and demand requirement date.
+- Observation timestamps such as receipt `posted_at`, commitment `observed_at`, inventory `snapshot_at`, source-load timestamps and effective timestamps are capped at the configured as-of timestamp.
+- `future_receipt_outcomes.csv` contains post-as-of realised receipts for evaluation and uses `evaluation_only_flag = true`.
+- `synthetic_outcome_observations.future_receipt_outcome_ids` links open-line outcomes to hidden future receipt realisations without adding those receipts to operational inputs.
