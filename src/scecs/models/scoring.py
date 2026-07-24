@@ -36,11 +36,12 @@ class CandidateRiskEvaluation(UuidPrimaryKeyMixin, Base):
             "'below-opening-threshold',"
             "'opened-new-episode',"
             "'linked-existing-active-episode',"
+            "'opening-eligible-no-workflow',"
             "'suppressed-by-existing-control',"
             "'ineligible-after-validation',"
             "'manual-review-data-insufficient',"
             "'scoring-error')",
-            name="disposition",
+            name="candidate_risk_evaluations_disposition_check",
         ),
     )
 
