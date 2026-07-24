@@ -1,14 +1,15 @@
 # Supply Chain Exception Control System
 
-Technical foundation for a portfolio project that will later support supply chain exception monitoring, PostgreSQL storage, Streamlit views, Power BI reporting, GitHub Actions, and controlled AI recommendations.
+Technical foundation for a portfolio project that supports governed supply-chain exception monitoring, PostgreSQL storage, deterministic risk scoring, core workflow services, a Streamlit operational MVP, GitHub Actions, and later Power BI reporting.
 
-The repository now includes the development baseline and the first physical PostgreSQL domain schema. It does not implement business rules, exception lifecycle services, risk scoring logic, notifications, Streamlit pages, Power BI models, or AI features.
+The repository includes the development baseline, governed physical PostgreSQL schema, synthetic data generation, ingestion controls, deterministic risk scoring, core exception workflow services, and a Streamlit operational MVP. It does not implement notifications, Power BI models, real authentication, scheduled processing, deployment infrastructure, or AI features.
 
 ## Project Structure
 
 ```text
 supply-chain-exception-control-system/
 +-- app/
+|   +-- streamlit_app.py
 +-- src/scecs/
 |   +-- __init__.py
 |   +-- config.py
@@ -16,6 +17,7 @@ supply-chain-exception-control-system/
 |   +-- db_health.py
 |   +-- logging_config.py
 |   +-- models/
+|   +-- streamlit_app/
 +-- tests/
 |   +-- unit/
 |   +-- integration/
@@ -43,6 +45,9 @@ supply-chain-exception-control-system/
 - SQLAlchemy 2.x engine and transaction-safe session helpers
 - Alembic migration infrastructure with the first governed physical PostgreSQL schema
 - Governed synthetic-source ingestion, validation, rejection, reconciliation, and publication controls
+- Deterministic risk-priority scoring
+- Core exception workflow services with immutable event history
+- Streamlit operational MVP for control tower, queue, detail, governed actions, audit history, and pipeline health
 - Pytest test setup
 - Ruff linting
 - Mypy type checking
@@ -265,6 +270,64 @@ python -m pip install .
 ```
 
 For normal development, prefer `python -m pip install -r requirements.txt` because it installs the package in editable mode plus the test, lint, and type-check tools.
+
+## Streamlit Operational MVP
+
+The Streamlit application connects the existing PostgreSQL models, ingestion controls, risk engine, and governed workflow service into an operational MVP. It does not reimplement business rules in the UI. Lifecycle writes call `scecs.workflow.service` through the Streamlit action wrapper.
+
+The app includes:
+
+- Control Tower;
+- Exception Queue;
+- Exception Detail;
+- assignment and investigation;
+- action agreement and monitoring;
+- resolution, closure, suppression, and approval controls;
+- immutable audit history;
+- pipeline health.
+
+Role switching is simulated for portfolio demonstration only. The app displays:
+
+```text
+Simulation only - not production authentication.
+```
+
+The simulated actor and approver lists come from active human users in PostgreSQL. This is not real authentication or authorization infrastructure.
+
+Prepare a local database:
+
+```powershell
+docker compose up -d postgres
+$env:SCECS_ENVIRONMENT="development"
+$env:SCECS_DB_HOST="localhost"
+$env:SCECS_DB_PORT="5432"
+$env:SCECS_DB_NAME="scecs_dev"
+$env:SCECS_DB_USER="scecs_user"
+$env:SCECS_DB_PASSWORD="scecs_password"
+python -m alembic upgrade head
+```
+
+Load the committed sample operational data:
+
+```powershell
+python -m scecs.ingestion.cli load --input data/sample/synthetic_ci
+```
+
+Score operational candidates:
+
+```powershell
+python -c "from datetime import UTC, datetime; from scecs.risk.service import score_operational_candidates; print(score_operational_candidates(as_of=datetime(2026, 6, 30, 18, 0, tzinfo=UTC), run_reference='STREAMLIT-DEMO-RISK'))"
+```
+
+If the app has no exceptions yet, use the Control Tower opening-eligible candidate section to open sample exceptions from governed candidates. The opening command calls the workflow service and records immutable event history.
+
+Launch Streamlit:
+
+```powershell
+python -m streamlit run app/streamlit_app.py
+```
+
+Safe empty states are shown when the database has no publication, pipeline runs, candidates, or exceptions.
 
 ## GitHub Actions Setup
 
