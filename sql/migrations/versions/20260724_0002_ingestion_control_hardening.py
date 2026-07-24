@@ -127,6 +127,7 @@ def downgrade() -> None:
         "dataset_name",
     ):
         op.drop_column("rejected_records", column)
+    op.execute("delete from rejected_records where source_load_id is null")
     op.alter_column("rejected_records", "source_load_id", existing_type=postgresql.UUID(as_uuid=True), nullable=False)
     op.drop_column("rejected_records", "pipeline_run_id")
 
