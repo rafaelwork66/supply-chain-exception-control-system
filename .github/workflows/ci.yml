@@ -60,6 +60,24 @@ jobs:
       - name: Run unit tests
         run: python -m pytest tests/unit
 
+      - name: Run Streamlit startup smoke check
+        env:
+          SCECS_STREAMLIT_STARTUP_SMOKE: "1"
+        run: |
+          python -m streamlit run app/streamlit_app.py \
+            --server.headless true \
+            --server.port 8765 \
+            --server.fileWatcherType none \
+            --browser.gatherUsageStats false &
+          STREAMLIT_PID=$!
+          sleep 10
+          if ! kill -0 "$STREAMLIT_PID" 2>/dev/null; then
+            echo "Streamlit app exited before startup smoke check completed"
+            exit 1
+          fi
+          kill "$STREAMLIT_PID"
+          wait "$STREAMLIT_PID" || true
+
       - name: Check database health
         run: python -m scecs.db_health
 

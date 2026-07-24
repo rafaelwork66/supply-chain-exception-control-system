@@ -12,6 +12,7 @@ dependencies = [
     "alembic==1.14.0",
     "psycopg[binary]==3.2.3",
     "SQLAlchemy==2.0.36",
+    "streamlit==1.41.1",
 ]
 
 [tool.setuptools.packages.find]
@@ -37,3 +38,7 @@ select = ["E", "F", "I", "B", "UP", "N", "ANN"]
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["streamlit.*"]
+ignore_missing_imports = true
