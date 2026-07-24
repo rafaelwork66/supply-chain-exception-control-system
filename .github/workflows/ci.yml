@@ -63,5 +63,16 @@ jobs:
       - name: Check database health
         run: python -m scecs.db_health
 
-      - name: Run integration tests
-        run: python -m pytest tests/integration
+      - name: Run ingestion PostgreSQL integration tests
+        run: python -m pytest tests/integration/test_ingestion_pipeline_postgresql.py -vv
+
+      - name: Run remaining integration tests
+        run: >-
+          python -m pytest tests/integration
+          --ignore=tests/integration/test_ingestion_pipeline_postgresql.py
+          --ignore=tests/integration/test_ingestion_full_profile_postgresql.py
+
+      - name: Run full-profile PostgreSQL ingestion test
+        env:
+          SCECS_RUN_FULL_PROFILE_TESTS: "1"
+        run: python -m pytest tests/integration/test_ingestion_full_profile_postgresql.py -s -vv

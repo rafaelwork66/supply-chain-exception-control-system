@@ -107,6 +107,7 @@ class ProductSiteInventoryPolicy(UuidPrimaryKeyMixin, Base):
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id"), nullable=False)
     site_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sites.id"), nullable=False)
     safety_stock_quantity: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
+    criticality: Mapped[str | None] = mapped_column(String(40))
     policy_source: Mapped[str] = mapped_column(String(80), nullable=False)
     substitution_group: Mapped[str | None] = mapped_column(String(80))
     effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
