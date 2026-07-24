@@ -25,6 +25,7 @@ FIXTURE = Path("data/sample/synthetic_ci")
 def engine() -> Engine:
     """Return the configured PostgreSQL engine."""
 
+    command.downgrade(Config("alembic.ini"), "base")
     command.upgrade(Config("alembic.ini"), "head")
     return create_database_engine()
 
