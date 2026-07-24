@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -105,6 +106,7 @@ def _load_dataset(
     if not records:
         return 0
     table = Base.metadata.tables[mapping.table_name]
+    before_count = int(session.execute(select(func.count()).select_from(table)).scalar_one())
     payload: list[dict[str, object]] = []
     for record in records:
         row = {column: record.values[column] for column in mapping.columns}
@@ -112,8 +114,9 @@ def _load_dataset(
             row["pipeline_run_id"] = run.id
         payload.append(row)
     statement = insert(table).values(payload).on_conflict_do_nothing()
-    result = session.execute(statement)
-    return int(result.rowcount or 0)
+    session.execute(statement)
+    after_count = int(session.execute(select(func.count()).select_from(table)).scalar_one())
+    return after_count - before_count
 
 
 def _disposition(rejection: Rejection) -> str:
