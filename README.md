@@ -42,6 +42,7 @@ supply-chain-exception-control-system/
 - PostgreSQL 16 local development with Docker Compose
 - SQLAlchemy 2.x engine and transaction-safe session helpers
 - Alembic migration infrastructure with the first governed physical PostgreSQL schema
+- Governed synthetic-source ingestion, validation, rejection, reconciliation, and publication controls
 - Pytest test setup
 - Ruff linting
 - Mypy type checking
@@ -153,6 +154,14 @@ Synthetic data support documents:
 - `docs/synthetic_generation_decisions.md`
 - `docs/synthetic_quality_report.md`
 
+Ingestion support documents:
+
+- `docs/ingestion_pipeline.md`
+- `docs/source_to_target_mapping.md`
+- `docs/data_quality_and_rejection_codes.md`
+- `docs/ingestion_reconciliation_report.md`
+- `docs/evaluation_data_boundary.md`
+
 ## Alembic Migrations
 
 Alembic is configured for PostgreSQL. The first migration creates the physical schema only; it does not implement business rules, lifecycle services, scoring services, notification sending, or AI.
@@ -225,6 +234,29 @@ python -m scecs.synthetic.cli summarise --profile portfolio --output data/genera
 ```
 
 `data/generated/` is ignored by Git. Do not commit full generated datasets unless explicitly approved.
+
+## Operational Ingestion
+
+The ingestion pipeline loads operational synthetic source datasets into governed PostgreSQL tables. It does not implement risk scoring, candidate-risk evaluation, exception creation, lifecycle services, Streamlit, notifications, Power BI, AI, or scheduled processing.
+
+Inspect and validate the committed CI fixture without a database:
+
+```powershell
+python -m scecs.ingestion.cli inspect --input data/sample/synthetic_ci
+python -m scecs.ingestion.cli validate --input data/sample/synthetic_ci
+python -m scecs.ingestion.cli mapping
+```
+
+Load a validated operational bundle after PostgreSQL is running and database environment variables are set:
+
+```powershell
+python -m alembic upgrade head
+python -m scecs.ingestion.cli load --input data/sample/synthetic_ci
+python -m scecs.ingestion.cli status --run-reference <run>
+python -m scecs.ingestion.cli reconcile --run-reference <run>
+```
+
+Default ingestion is operational-only. It detects but does not load `future_receipt_outcomes.csv`, `synthetic_outcome_observations.csv`, scenario registry files, or upstream generator `pipeline_runs.csv`.
 
 Verify package installation from a clean checkout:
 
