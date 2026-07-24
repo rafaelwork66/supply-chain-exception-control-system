@@ -12,14 +12,14 @@ from sqlalchemy import select
 from scecs.database import create_database_engine, create_session_factory, session_scope
 from scecs.ingestion.config import LOAD_ORDER
 from scecs.ingestion.contracts import Rejection, SourceRecord, build_contracts
-from scecs.ingestion.loaders import create_ingestion_run, load_operational_records
+from scecs.ingestion.loaders import create_ingestion_run, load_operational_records, persist_rejections
 from scecs.ingestion.manifest import BundleManifest, verify_bundle
 from scecs.ingestion.parsers import parse_dataset_rows
 from scecs.ingestion.publication import publish_successful_run
 from scecs.ingestion.readers import read_csv_rows
 from scecs.ingestion.reconciliation import DatasetReconciliation, reconcile_loaded_datasets
 from scecs.ingestion.validators import has_blocking_rejections, validate_cross_dataset, validate_operational_scope
-from scecs.models.source_control import AnalyticsPublication, PipelineRun, ReconciliationResult
+from scecs.models.source_control import AnalyticsPublication, PipelineRun, ReconciliationResult, SourceLoad
 
 
 @dataclass(frozen=True)
@@ -114,6 +114,7 @@ def load_bundle(input_path: Path) -> LoadResult:
     with session_scope(session_factory) as session:
         run = create_ingestion_run(session, validation.manifest)
         if has_blocking_rejections(validation.rejections):
+            persist_rejections(session, validation.rejections, _fallback_source_load_id(session))
             run.status = "failed"
             run.finished_at = datetime.now(UTC)
             return LoadResult(run.run_reference, None, validation.rejections, [])
@@ -179,3 +180,13 @@ def run_reconciliation_rows(session: object, run_id: UUID) -> list[Reconciliatio
             select(ReconciliationResult).where(ReconciliationResult.pipeline_run_id == run_id)
         ).scalars()
     )
+
+
+def _fallback_source_load_id(session: object) -> UUID | None:
+    """Return an existing source-load anchor for failed-attempt rejection evidence."""
+
+    from sqlalchemy.orm import Session
+
+    typed_session = session
+    assert isinstance(typed_session, Session)
+    return typed_session.execute(select(SourceLoad.id).limit(1)).scalar_one_or_none()
