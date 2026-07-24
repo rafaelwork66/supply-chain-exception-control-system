@@ -56,8 +56,6 @@ def test_ingestion_pipeline_database_behaviour(engine: Engine, tmp_path: Path) -
     assert any(row.existing_rows > 0 for row in second.reconciliations)
     assert second.run_reference != first.run_reference
 
-    current_before = _current_publication_reference(engine)
-
     changed_bundle = tmp_path / "changed_bundle"
     shutil.copytree(FIXTURE, changed_bundle)
     _mutate_supplier_code(changed_bundle)
@@ -65,6 +63,7 @@ def test_ingestion_pipeline_database_behaviour(engine: Engine, tmp_path: Path) -
     assert changed.passed
     assert changed.run_reference not in {first.run_reference, second.run_reference}
 
+    current_before = _current_publication_reference(engine)
     counts_before_failure = _operational_counts(engine)
     rejected_before = _rejected_record_count(engine)
     bundle = tmp_path / "bundle"
