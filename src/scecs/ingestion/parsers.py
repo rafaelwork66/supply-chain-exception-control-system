@@ -64,6 +64,8 @@ def parse_dataset_rows(
                         RejectionClass.RECORD_REJECTABLE,
                         field_name,
                         raw_value,
+                        None,
+                        fingerprint,
                     )
                 )
                 value = None

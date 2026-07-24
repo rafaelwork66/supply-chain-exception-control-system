@@ -43,6 +43,10 @@ Stage A validates the bundle, manifest and each record contract. Stage B validat
 | `RECEIPT_SCHEDULE_LINE_MISMATCH` | Dataset-blocking | Receipt and schedule belong to different PO lines. |
 | `RECEIPT_ALLOCATION_MISMATCH` | Dataset-blocking | Receipt allocations do not reconcile to absolute receipt quantity. |
 | `COMMITMENT_SCHEDULE_LINE_MISMATCH` | Dataset-blocking | Commitment and schedule belong to different PO lines. |
+| `NEGATIVE_MONETARY_VALUE` | Dataset-blocking | PO-line unit price or line value is negative. |
+| `LINE_VALUE_MISMATCH` | Dataset-blocking | PO-line value does not reconcile to base quantity times unit price within monetary tolerance. |
+| `SOURCE_IDENTITY_CONFLICT` | Dataset-blocking | Existing target row has the same governed source identity but different mapped content. |
+| `DATABASE_LOAD_FAILURE` | Dataset-blocking | PostgreSQL or loader failure occurred after an ingestion run was created. |
 
-Rejected values are represented safely. The governed database table stores rejection metadata, not credentials, secrets or binary payloads.
+Rejected values are represented safely. `rejected_records.observed_value_hash` stores a safe hash, never the raw rejected value. Rejections and warning-only exclusions also preserve run ID, dataset name, source row number, natural key, raw row fingerprint, classification, disposition and rejection timestamp. `source_load_id` is nullable so bundle failures before source-load creation can still be preserved.
 

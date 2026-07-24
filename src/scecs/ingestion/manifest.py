@@ -12,6 +12,7 @@ from scecs.ingestion.config import (
     EVALUATION_ONLY_DATASETS,
     EXPECTED_GENERATOR_VERSION,
     EXPECTED_SCHEMA_VERSION,
+    OPERATIONAL_DATASETS,
     REQUIRED_CONTROL_FILES,
 )
 from scecs.ingestion.contracts import Rejection, RejectionClass
@@ -45,6 +46,8 @@ class BundleManifest:
     schema_version: str
     as_of_timestamp: str
     evaluation_only_datasets: frozenset[str]
+    operational_row_count: int
+    bundle_fingerprint: str
 
 
 def file_hash(path: Path) -> str:
@@ -180,6 +183,8 @@ def verify_bundle(input_path: Path) -> tuple[BundleManifest | None, list[Rejecti
         schema_version=first.schema_version,
         as_of_timestamp=first.as_of_timestamp,
         evaluation_only_datasets=frozenset(rows) & EVALUATION_ONLY_DATASETS,
+        operational_row_count=sum(row.row_count for name, row in rows.items() if name in OPERATIONAL_DATASETS),
+        bundle_fingerprint=_bundle_fingerprint(rows),
     )
     return manifest, rejections
 
@@ -215,3 +220,11 @@ def _count_data_rows(path: Path) -> int:
         reader = csv.reader(handle)
         next(reader, None)
         return sum(1 for _ in reader)
+
+
+def _bundle_fingerprint(rows: dict[str, ManifestRow]) -> str:
+    digest = hashlib.sha256()
+    for dataset_name in sorted(rows):
+        row = rows[dataset_name]
+        digest.update(f"{row.dataset_name}:{row.file_hash}:{row.row_count}\n".encode())
+    return digest.hexdigest()

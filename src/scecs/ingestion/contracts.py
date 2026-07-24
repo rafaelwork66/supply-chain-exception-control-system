@@ -32,6 +32,7 @@ class Rejection:
     field_name: str | None = None
     rejected_value: str | None = None
     natural_key: str | None = None
+    raw_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,8 @@ DECIMAL_COLUMNS: Final = frozenset(
         "in_transit_quantity",
         "required_quantity",
         "otif_rate",
+        "unit_price_aud",
+        "line_value_aud",
     }
 )
 INTEGER_COLUMNS: Final = frozenset(
@@ -236,13 +239,13 @@ def build_contracts() -> dict[str, DatasetContract]:
                     "product_id",
                     "site_id",
                     "safety_stock_quantity",
+                    "criticality",
                     "policy_source",
                     "substitution_group",
                     "effective_from",
                     "effective_to",
                 }
             ),
-            frozenset({"criticality"}),
         ),
         "users": DatasetContract(
             "users",
@@ -345,6 +348,8 @@ def build_contracts() -> dict[str, DatasetContract]:
                     "ordered_quantity",
                     "order_uom",
                     "base_quantity",
+                    "unit_price_aud",
+                    "line_value_aud",
                     "need_date",
                     "requested_date",
                     "line_status",
@@ -354,8 +359,6 @@ def build_contracts() -> dict[str, DatasetContract]:
             frozenset(
                 {
                     "po_supplier_id",
-                    "unit_price_aud",
-                    "line_value_aud",
                     "scenario_ids",
                     "scenario_types",
                     "critical_order_flag",

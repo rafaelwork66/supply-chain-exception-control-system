@@ -58,13 +58,16 @@ Each dataset reconciliation contains:
 - accepted rows;
 - inserted rows;
 - existing/idempotent rows;
+- conflicting rows;
 - rejected rows;
+- matched target rows;
 - target table rows;
+- total table rows;
 - difference;
 - status;
 - explanation.
 
-Local PostgreSQL integration tests are present in `tests/integration/test_ingestion_pipeline_postgresql.py`. They are skipped unless `SCECS_RUN_INTEGRATION_TESTS=1` and database environment variables are set.
+Local PostgreSQL integration tests are present in `tests/integration/test_ingestion_pipeline_postgresql.py`. They are skipped unless `SCECS_RUN_INTEGRATION_TESTS=1` and database environment variables are set. CI also runs `tests/integration/test_ingestion_full_profile_postgresql.py` with `SCECS_RUN_FULL_PROFILE_TESTS=1` to generate and load the full portfolio profile without committing generated CSV files.
 
 ## Full Portfolio Validation Evidence
 

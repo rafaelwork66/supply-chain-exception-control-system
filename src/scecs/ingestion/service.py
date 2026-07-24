@@ -8,10 +8,11 @@ from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from scecs.database import create_database_engine, create_session_factory, session_scope
 from scecs.ingestion.config import LOAD_ORDER
-from scecs.ingestion.contracts import Rejection, SourceRecord, build_contracts
+from scecs.ingestion.contracts import Rejection, RejectionClass, SourceRecord, build_contracts
 from scecs.ingestion.loaders import create_ingestion_run, load_operational_records, persist_rejections
 from scecs.ingestion.manifest import BundleManifest, verify_bundle
 from scecs.ingestion.parsers import parse_dataset_rows
@@ -19,7 +20,15 @@ from scecs.ingestion.publication import publish_successful_run
 from scecs.ingestion.readers import read_csv_rows
 from scecs.ingestion.reconciliation import DatasetReconciliation, reconcile_loaded_datasets
 from scecs.ingestion.validators import has_blocking_rejections, validate_cross_dataset, validate_operational_scope
-from scecs.models.source_control import AnalyticsPublication, PipelineRun, ReconciliationResult, SourceLoad
+from scecs.models.source_control import AnalyticsPublication, PipelineRun, ReconciliationResult
+
+
+class SourceIdentityConflictError(RuntimeError):
+    """Raised when source rows conflict with existing governed identities."""
+
+    def __init__(self, rejections: list[Rejection]) -> None:
+        super().__init__("source identity conflict")
+        self.rejections = rejections
 
 
 @dataclass(frozen=True)
@@ -113,19 +122,57 @@ def load_bundle(input_path: Path) -> LoadResult:
     session_factory = create_session_factory(engine)
     with session_scope(session_factory) as session:
         run = create_ingestion_run(session, validation.manifest)
-        if has_blocking_rejections(validation.rejections):
-            persist_rejections(session, validation.rejections, _fallback_source_load_id(session))
-            run.status = "failed"
-            run.finished_at = datetime.now(UTC)
+        run_reference = run.run_reference
+
+    if has_blocking_rejections(validation.rejections):
+        with session_scope(session_factory) as session:
+            run = session.execute(select(PipelineRun).where(PipelineRun.run_reference == run_reference)).scalar_one()
+            _persist_and_fail_run(session, run, validation.rejections, "validation_blocked")
             return LoadResult(run.run_reference, None, validation.rejections, [])
-        load_results = load_operational_records(session, validation.records_by_dataset, run)
-        reconciliations = reconcile_loaded_datasets(session, run, load_results)
-        if any(item.status != "passed" for item in reconciliations):
-            run.status = "failed"
-            run.finished_at = datetime.now(UTC)
-            return LoadResult(run.run_reference, None, validation.rejections, reconciliations)
-        publication = publish_successful_run(session, run, validation.manifest, reconciliations)
-        return LoadResult(run.run_reference, publication.publication_reference, validation.rejections, reconciliations)
+
+    if validation.rejections:
+        with session_scope(session_factory) as session:
+            run = session.execute(select(PipelineRun).where(PipelineRun.run_reference == run_reference)).scalar_one()
+            persist_rejections(session, validation.rejections, run, None)
+
+    try:
+        with session_scope(session_factory) as session:
+            run = session.execute(select(PipelineRun).where(PipelineRun.run_reference == run_reference)).scalar_one()
+            load_results = load_operational_records(session, validation.records_by_dataset, run, validation.manifest)
+            load_rejections = [rejection for result in load_results for rejection in result.rejections]
+            if load_rejections:
+                raise SourceIdentityConflictError(load_rejections)
+            reconciliations = reconcile_loaded_datasets(session, run, load_results, validation.rejections)
+            if any(item.status != "passed" for item in reconciliations):
+                run.status = "failed"
+                run.finished_at = datetime.now(UTC)
+                run.failure_reason = "reconciliation_failed"
+                run.rejected_row_count = len(validation.rejections)
+                return LoadResult(run.run_reference, None, validation.rejections, reconciliations)
+            publication = publish_successful_run(session, run, validation.manifest, reconciliations)
+            run.accepted_row_count = sum(item.accepted_rows for item in reconciliations)
+            run.rejected_row_count = sum(item.rejected_rows for item in reconciliations) + len(validation.rejections)
+            return LoadResult(
+                run.run_reference, publication.publication_reference, validation.rejections, reconciliations
+            )
+    except SourceIdentityConflictError as exc:
+        validation.rejections.extend(exc.rejections)
+        with session_scope(session_factory) as session:
+            run = session.execute(select(PipelineRun).where(PipelineRun.run_reference == run_reference)).scalar_one()
+            _persist_and_fail_run(session, run, validation.rejections, "source_identity_conflict")
+            return LoadResult(run.run_reference, None, validation.rejections, [])
+    except SQLAlchemyError as exc:
+        with session_scope(session_factory) as session:
+            run = session.execute(select(PipelineRun).where(PipelineRun.run_reference == run_reference)).scalar_one()
+            failure = Rejection(
+                "database",
+                None,
+                "DATABASE_LOAD_FAILURE",
+                exc.__class__.__name__,
+                RejectionClass.DATASET_BLOCKING,
+            )
+            _persist_and_fail_run(session, run, [failure], "database_load_failure")
+            return LoadResult(run.run_reference, None, [failure], [])
 
 
 def get_status(run_reference: str) -> dict[str, object]:
@@ -163,6 +210,14 @@ def get_reconciliation(run_reference: str) -> list[dict[str, object]]:
                 "target_count": row.target_count,
                 "difference_count": row.difference_count,
                 "is_blocking": row.is_blocking,
+                "inserted_count": row.inserted_count,
+                "existing_count": row.existing_count,
+                "conflicting_count": row.conflicting_count,
+                "rejected_count": row.rejected_count,
+                "matched_target_count": row.matched_target_count,
+                "total_table_count": row.total_table_count,
+                "status": row.status,
+                "explanation": row.explanation,
             }
             for row in run_reconciliation_rows(session, run.id)
         ]
@@ -182,11 +237,18 @@ def run_reconciliation_rows(session: object, run_id: UUID) -> list[Reconciliatio
     )
 
 
-def _fallback_source_load_id(session: object) -> UUID | None:
-    """Return an existing source-load anchor for failed-attempt rejection evidence."""
-
+def _persist_and_fail_run(
+    session: object,
+    run: PipelineRun,
+    rejections: list[Rejection],
+    failure_reason: str,
+) -> None:
     from sqlalchemy.orm import Session
 
     typed_session = session
     assert isinstance(typed_session, Session)
-    return typed_session.execute(select(SourceLoad.id).limit(1)).scalar_one_or_none()
+    persist_rejections(typed_session, rejections, run, None)
+    run.status = "failed"
+    run.finished_at = datetime.now(UTC)
+    run.failure_reason = failure_reason
+    run.rejected_row_count = len(rejections)

@@ -52,6 +52,14 @@ class PipelineRun(UuidPrimaryKeyMixin, Base):
     release_version: Mapped[str | None] = mapped_column(String(80))
     configuration_hash: Mapped[str | None] = mapped_column(String(128))
     is_publication_eligible: Mapped[bool] = mapped_column(nullable=False, default=False)
+    bundle_reference: Mapped[str | None] = mapped_column(String(255))
+    manifest_hash: Mapped[str | None] = mapped_column(String(128))
+    bundle_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    upstream_generator_version: Mapped[str | None] = mapped_column(String(80))
+    source_row_count: Mapped[int | None] = mapped_column(Integer)
+    accepted_row_count: Mapped[int | None] = mapped_column(Integer)
+    rejected_row_count: Mapped[int | None] = mapped_column(Integer)
+    failure_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class SourceLoad(UuidPrimaryKeyMixin, Base):
@@ -75,6 +83,11 @@ class SourceLoad(UuidPrimaryKeyMixin, Base):
     extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    upstream_source_load_id: Mapped[uuid.UUID | None] = mapped_column()
+    upstream_pipeline_run_id: Mapped[uuid.UUID | None] = mapped_column()
+    manifest_dataset_name: Mapped[str | None] = mapped_column(String(80))
+    manifest_file_name: Mapped[str | None] = mapped_column(String(255))
+    manifest_file_hash: Mapped[str | None] = mapped_column(String(128))
 
 
 class PipelineStepResult(UuidPrimaryKeyMixin, Base):
@@ -113,15 +126,22 @@ class RejectedRecord(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
         ),
     )
 
-    source_load_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("source_loads.id"), nullable=False)
+    pipeline_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pipeline_runs.id"))
+    source_load_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("source_loads.id"))
+    dataset_name: Mapped[str | None] = mapped_column(String(80))
+    source_row_number: Mapped[int | None] = mapped_column(Integer)
+    source_natural_key: Mapped[str | None] = mapped_column(String(255))
+    raw_row_fingerprint: Mapped[str | None] = mapped_column(String(128))
     source_row_ref: Mapped[str] = mapped_column(String(120), nullable=False)
     defect_code: Mapped[str] = mapped_column(String(80), nullable=False)
     field_name: Mapped[str | None] = mapped_column(String(80))
     observed_value_hash: Mapped[str | None] = mapped_column(String(128))
+    classification: Mapped[str | None] = mapped_column(String(40))
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     disposition: Mapped[str] = mapped_column(String(30), nullable=False)
     resolution_status: Mapped[str] = mapped_column(String(30), nullable=False, default="open")
     notes: Mapped[str | None] = mapped_column(Text)
+    rejected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ReconciliationResult(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
@@ -142,6 +162,14 @@ class ReconciliationResult(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):
     target_count: Mapped[int] = mapped_column(Integer, nullable=False)
     difference_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_blocking: Mapped[bool] = mapped_column(nullable=False, default=False)
+    inserted_count: Mapped[int | None] = mapped_column(Integer)
+    existing_count: Mapped[int | None] = mapped_column(Integer)
+    conflicting_count: Mapped[int | None] = mapped_column(Integer)
+    rejected_count: Mapped[int | None] = mapped_column(Integer)
+    matched_target_count: Mapped[int | None] = mapped_column(Integer)
+    total_table_count: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str | None] = mapped_column(String(20))
+    explanation: Mapped[str | None] = mapped_column(Text)
 
 
 class AnalyticsPublication(UuidPrimaryKeyMixin, RecordedTimestampMixin, Base):

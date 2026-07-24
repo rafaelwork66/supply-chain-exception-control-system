@@ -27,8 +27,8 @@ python -m scecs.ingestion.cli status --run-reference <run>
 | `parsers.py` | Stage A record parsing and contract validation. |
 | `validators.py` | Stage B cross-dataset validation and as-of controls. |
 | `mappings.py` | Explicit source-to-target table mappings and excluded evidence columns. |
-| `loaders.py` | PostgreSQL transactional inserts with idempotent `ON CONFLICT DO NOTHING`. |
-| `reconciliation.py` | Dataset-level source, accepted, inserted, existing and target counts. |
+| `loaders.py` | PostgreSQL bounded-batch loading, per-attempt source-load lineage and conflict-aware idempotency. |
+| `reconciliation.py` | Dataset-level source, accepted, inserted, existing, conflicting, rejected, matched and total-table counts. |
 | `publication.py` | Atomic current-success publication pointer update. |
 | `service.py` | End-to-end inspect, validate, load, status and reconciliation orchestration. |
 | `cli.py` | Command-line entry point. |
@@ -48,16 +48,23 @@ The dependency-safe load order is:
 
 `load` validates the bundle before any operational load. If blocking validation exists, the actual ingestion run is recorded as failed and no publication is created.
 
-For valid data, operational rows load inside one PostgreSQL transaction. Reconciliation rows and publication are created in the same transaction. The current-success publication pointer is replaced only after reconciliation passes. A failed run does not delete previous successful pipeline evidence and does not replace the current successful publication.
+Every ingestion attempt first creates a durable `pipeline_runs` control row with bundle reference, manifest hash, bundle fingerprint, upstream generator version and source row count. Operational rows then load inside one PostgreSQL transaction. Reconciliation rows and publication are created in that same operational transaction. The current-success publication pointer is replaced only after reconciliation passes.
+
+If validation blocks before loading, the run is marked failed and all rejections are persisted, even on an empty database. If PostgreSQL fails after loading starts, domain rows, source-load rows, reconciliation rows and publication changes from that attempt are rolled back; the durable run is then marked failed with safe rejection/error evidence. Previous current-success publication remains unchanged.
 
 ## Idempotency
 
-Reruns use:
+The loader does not use blind `ON CONFLICT DO NOTHING`. For each mapped row, the governed source identity is checked against the existing target row:
 
-- the manifest hash and configuration hash as the bundle fingerprint;
-- stable source UUIDs from the deterministic generator;
-- source natural keys and database uniqueness constraints;
-- PostgreSQL `ON CONFLICT DO NOTHING`.
+- absent identity = inserted;
+- identical existing mapped content = existing/idempotent;
+- same identity with different mapped content = `SOURCE_IDENTITY_CONFLICT`, failed run and no publication.
 
-The first valid load inserts records. A second identical load creates a new ingestion run but reports existing domain rows instead of duplicating them. A changed bundle has a different manifest hash and creates a distinct run. Blocking failures remain unpublished.
+Source-load lineage is per attempt. The loader creates new internal `source_loads` rows for each ingestion run, preserves upstream source-load identity and manifest metadata on those rows, and remaps downstream `source_load_id` values in memory before insert. Existing accepted domain rows may remain linked to the original successful attempt source load; identical reruns create new source-load evidence but do not duplicate domain rows.
+
+Rows load in configurable bounded batches. The default batch size is 1,000 records, preserving deterministic load order and one atomic operational publication transaction.
+
+## Publication Rule for Rejections
+
+Warning-only exclusions and record-rejectable rows are persisted. Record-rejectable rows may continue only when no blocking relationship or control fails. Dataset-blocking, bundle-blocking and identity-conflict rejections prohibit publication.
 

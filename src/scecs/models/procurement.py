@@ -103,6 +103,8 @@ class PurchaseOrderLineVersion(UuidPrimaryKeyMixin, Base):
     ordered_quantity: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     order_uom: Mapped[str] = mapped_column(String(20), nullable=False)
     base_quantity: Mapped[float | None] = mapped_column(Numeric(18, 4))
+    unit_price_aud: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    line_value_aud: Mapped[float | None] = mapped_column(Numeric(18, 2))
     need_date: Mapped[date] = mapped_column(nullable=False)
     requested_date: Mapped[date | None] = mapped_column()
     line_status: Mapped[str] = mapped_column(String(20), nullable=False)

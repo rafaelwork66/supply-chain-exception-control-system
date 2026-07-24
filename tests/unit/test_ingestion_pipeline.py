@@ -154,6 +154,22 @@ def test_future_planned_date_remains_allowed(tmp_path: Path) -> None:
     assert validation.passed
 
 
+def test_line_value_mismatch_fails(tmp_path: Path) -> None:
+    """Purchase-order line value should reconcile to base quantity times unit price."""
+
+    bundle = copy_fixture(tmp_path)
+    path = bundle / "purchase_order_line_versions.csv"
+    rows, fieldnames = read_csv(path)
+    rows[0]["line_value_aud"] = "0.01"
+    rewrite_csv(path, rows, fieldnames)
+    _sync_manifest_for_test(bundle, "purchase_order_line_versions")
+
+    validation = validate_bundle(bundle)
+
+    assert not validation.passed
+    assert {row.code for row in validation.rejections} >= {"LINE_VALUE_MISMATCH"}
+
+
 def test_evaluation_only_files_are_not_operationally_loaded() -> None:
     """Default validation reports evaluation-only files as skipped warnings."""
 

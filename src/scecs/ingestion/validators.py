@@ -81,6 +81,7 @@ def validate_cross_dataset(records_by_dataset: dict[str, list[SourceRecord]], as
     _validate_schedule_line_reconciliation(records_by_dataset, rejections)
     _validate_receipt_allocations(records_by_dataset, rejections)
     _validate_commitment_schedule_consistency(records_by_dataset, rejections)
+    _validate_line_value_amounts(records_by_dataset, rejections)
     return rejections
 
 
@@ -288,6 +289,44 @@ def _validate_commitment_schedule_consistency(
                         record.natural_key,
                     )
                 )
+
+
+def _validate_line_value_amounts(
+    records_by_dataset: dict[str, list[SourceRecord]],
+    rejections: list[Rejection],
+) -> None:
+    for record in records_by_dataset.get("purchase_order_line_versions", []):
+        base_quantity = _decimal(record.values["base_quantity"])
+        unit_price = _decimal(record.values["unit_price_aud"])
+        line_value = _decimal(record.values["line_value_aud"])
+        if unit_price < 0 or line_value < 0:
+            rejections.append(
+                Rejection(
+                    "purchase_order_line_versions",
+                    record.row_number,
+                    "NEGATIVE_MONETARY_VALUE",
+                    "unit_price_aud and line_value_aud must be non-negative",
+                    RejectionClass.DATASET_BLOCKING,
+                    "line_value_aud",
+                    str(line_value),
+                    record.natural_key,
+                )
+            )
+            continue
+        expected = (base_quantity * unit_price).quantize(Decimal("0.01"))
+        if abs(expected - line_value) > Decimal("0.01"):
+            rejections.append(
+                Rejection(
+                    "purchase_order_line_versions",
+                    record.row_number,
+                    "LINE_VALUE_MISMATCH",
+                    f"{expected} != {line_value}",
+                    RejectionClass.DATASET_BLOCKING,
+                    "line_value_aud",
+                    str(line_value),
+                    record.natural_key,
+                )
+            )
 
 
 def _decimal(value: object) -> Decimal:
