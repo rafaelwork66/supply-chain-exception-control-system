@@ -6,7 +6,8 @@ import os
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from decimal import Decimal
+from typing import Literal, cast
 
 import streamlit as st
 from sqlalchemy.orm import Session, sessionmaker
@@ -34,6 +35,7 @@ from scecs.streamlit_app.view_models import (
     CandidateRow,
     ExceptionDetail,
     ExceptionQueueRow,
+    PipelineStatus,
     UserOption,
     rows_to_records,
 )
@@ -41,6 +43,7 @@ from scecs.workflow.service import WorkflowError
 
 APP_TITLE = "Supply Chain Exception Control"
 SIMULATION_WARNING = "Simulation only - not production authentication."
+COMMAND_PROCESSING_KEY = "scecs_command_processing"
 SessionFactory = sessionmaker[Session]
 
 
@@ -122,7 +125,7 @@ def render_control_tower(
             format_func=lambda row: f"{row.site_code} | {row.supplier_name} | {row.po_line} | {row.band} {row.score}",
         )
         reason = st.text_input("Opening reason", value="Opened from governed risk candidate.")
-        if st.button("Open Exception", type="primary"):
+        if _action_button("Open Exception", type="primary"):
             _run_command(
                 lambda: _open_candidate_command(session_factory, selected_candidate, actor, reason),
                 "Exception opened from candidate.",
@@ -135,13 +138,27 @@ def render_exception_queue(read_service: OperationalReadService, filters: dict[s
     """Render searchable and filterable exception queue."""
 
     st.header("Exception Queue")
-    selected_states = st.sidebar.multiselect("State", filters["states"], key="queue_states")
-    selected_bands = st.sidebar.multiselect("Risk band", filters["bands"], key="queue_bands")
+    selected_states = st.sidebar.multiselect(
+        "State",
+        filters["states"],
+        key="queue_states",
+        format_func=friendly_label,
+    )
+    selected_bands = st.sidebar.multiselect(
+        "Risk band",
+        filters["bands"],
+        key="queue_bands",
+        format_func=friendly_label,
+    )
     selected_sites = st.sidebar.multiselect("Site", filters["sites"], key="queue_sites")
     selected_suppliers = st.sidebar.multiselect("Supplier", filters["suppliers"], key="queue_suppliers")
     selected_owners = st.sidebar.multiselect("Owner", filters["owners"], key="queue_owners")
     unassigned_only = st.sidebar.checkbox("Unassigned only")
-    selected_sla = st.sidebar.multiselect("SLA condition", ("breached", "active", "not_tracked"))
+    selected_sla = st.sidebar.multiselect(
+        "SLA condition",
+        ("breached", "active", "not_tracked"),
+        format_func=friendly_label,
+    )
     search = st.text_input("Search by exception, site, supplier, PO line or product")
     rows = read_service.exception_queue(
         states=selected_states,
@@ -158,9 +175,11 @@ def render_exception_queue(read_service: OperationalReadService, filters: dict[s
         selected = st.selectbox(
             "Open Exception Detail",
             rows,
-            format_func=lambda row: f"{row.exception_reference} | {row.state} | {row.site_code} | {row.po_line}",
+            format_func=lambda row: (
+                f"{row.exception_reference} | {friendly_label(row.state)} | {row.site_code} | {row.po_line}"
+            ),
         )
-        if st.button("Open selected detail"):
+        if _action_button("Open selected detail"):
             st.session_state["selected_episode_id"] = str(selected.episode_id)
             st.success("Selected exception is ready on the Exception Detail page.")
 
@@ -245,7 +264,10 @@ def _render_assignment_action(
         return
     owner = st.selectbox("Owner", users, format_func=lambda user: user.label)
     reason = st.text_input("Assignment reason", value="Operational ownership assigned.")
-    if st.button("Assign / Reassign"):
+    unchanged_owner = not assignment_owner_changed(detail.summary.owner_user_id, owner.user_id)
+    if unchanged_owner:
+        st.caption("Selected owner is already assigned to this exception.")
+    if _action_button("Assign / Reassign", disabled=unchanged_owner):
         _run_command(
             lambda: _assign_command(session_factory, detail.summary.episode_id, actor, owner, reason),
             "Assignment recorded.",
@@ -260,14 +282,14 @@ def _render_investigation_actions(
 ) -> None:
     if availability.can_start_investigation:
         reason = st.text_input("Investigation start reason", value="Investigation started.")
-        if st.button("Move to Investigating"):
+        if _action_button("Move to Investigating"):
             _run_command(
                 lambda: _investigate_command(session_factory, detail.summary.episode_id, actor, reason),
                 "Exception moved to Investigating.",
             )
     if availability.can_add_investigation_note:
         note = st.text_area("Investigation note")
-        if st.button("Add Investigation Note", disabled=note.strip() == ""):
+        if _action_button("Add Investigation Note", disabled=note.strip() == ""):
             _run_command(
                 lambda: _note_command(session_factory, detail.summary.episode_id, actor, note),
                 "Investigation note added.",
@@ -287,7 +309,7 @@ def _render_action_agreement_actions(
     if availability.can_create_action_agreement:
         action = st.text_area("Action agreement")
         owner = st.selectbox("Action owner", users, format_func=lambda user: user.label, key="action_owner")
-        if st.button("Create Action Agreement", disabled=action.strip() == ""):
+        if _action_button("Create Action Agreement", disabled=action.strip() == ""):
             _run_command(
                 lambda: _agreement_command(session_factory, detail.summary.episode_id, actor, owner, action),
                 "Action agreement created.",
@@ -296,7 +318,7 @@ def _render_action_agreement_actions(
         action = st.text_area("Updated action agreement")
         previous_action_id = read_service.latest_action_agreement_id(detail.summary.episode_id)
         disabled = action.strip() == "" or previous_action_id is None
-        if st.button("Update Action Agreement", disabled=disabled):
+        if _action_button("Update Action Agreement", disabled=disabled):
             assert previous_action_id is not None
             _run_command(
                 lambda: _agreement_update_command(
@@ -316,14 +338,14 @@ def _render_monitoring_actions(
 ) -> None:
     if availability.can_start_monitoring:
         reason = st.text_input("Monitoring start reason", value="Agreed action is ready for monitoring.")
-        if st.button("Move to Monitoring"):
+        if _action_button("Move to Monitoring"):
             _run_command(
                 lambda: _monitoring_command(session_factory, detail.summary.episode_id, actor, reason),
                 "Exception moved to Monitoring.",
             )
     if availability.can_add_monitoring_observation:
         observation = st.text_area("Monitoring observation")
-        if st.button("Add Monitoring Observation", disabled=observation.strip() == ""):
+        if _action_button("Add Monitoring Observation", disabled=observation.strip() == ""):
             _run_command(
                 lambda: _observation_command(session_factory, detail.summary.episode_id, actor, observation),
                 "Monitoring observation added.",
@@ -346,21 +368,21 @@ def _render_resolution_closure_actions(
 
     if availability.can_resolve:
         statement = st.text_area("Residual risk statement", value="Residual risk reviewed and accepted.")
-        if st.button("Approve Resolution", disabled=not independent or statement.strip() == ""):
+        if _action_button("Approve Resolution", disabled=not independent or statement.strip() == ""):
             _run_command(
                 lambda: _resolution_command(session_factory, detail.summary.episode_id, actor, approver, statement),
                 "Resolution approved and recorded.",
             )
     if availability.can_close:
         reason = st.text_input("Closure reason", value="Closure independently approved.")
-        if st.button("Approve Closure", disabled=not independent or reason.strip() == ""):
+        if _action_button("Approve Closure", disabled=not independent or reason.strip() == ""):
             _run_command(
                 lambda: _closure_command(session_factory, detail.summary.episode_id, actor, approver, reason),
                 "Closure approved and recorded.",
             )
     if availability.can_reopen:
         reason = st.text_input("Reopen reason", value="Material condition changed; investigation reopened.")
-        if st.button("Reopen to Investigating", disabled=reason.strip() == ""):
+        if _action_button("Reopen to Investigating", disabled=reason.strip() == ""):
             _run_command(
                 lambda: _reopen_command(session_factory, detail.summary.episode_id, actor, reason),
                 "Reopened event recorded.",
@@ -400,7 +422,7 @@ def _render_suppression_action(
         st.warning("Self-approval is blocked before submission.")
     if not future_expiry:
         st.warning("Suppression expiry must be in the future.")
-    if st.button("Approve Suppression", disabled=disabled):
+    if _action_button("Approve Suppression", disabled=disabled):
         expires_at = datetime.combine(expiry_date, time(23, 59), tzinfo=UTC)
         _run_command(
             lambda: _suppression_command(
@@ -420,24 +442,12 @@ def _render_suppression_action(
 def _render_detail_summary(detail: ExceptionDetail) -> None:
     row = detail.summary
     metric_columns = st.columns(5)
-    metric_columns[0].metric("State", row.state)
+    metric_columns[0].metric("State", friendly_label(row.state))
     metric_columns[1].metric("Owner", row.owner or "Unassigned")
     metric_columns[2].metric("Score", str(row.score or "n/a"))
-    metric_columns[3].metric("Band", row.band or "n/a")
-    metric_columns[4].metric("SLA", row.sla_status)
-    st.write(
-        {
-            "exception_reference": row.exception_reference,
-            "site": row.site_code,
-            "supplier": row.supplier_name,
-            "po_line": row.po_line,
-            "product": row.product,
-            "residual_quantity": row.residual_quantity,
-            "residual_value": row.residual_value,
-            "need_date": row.need_date,
-            "age_days": row.age_days,
-        }
-    )
+    metric_columns[3].metric("Band", friendly_label(row.band) if row.band else "n/a")
+    metric_columns[4].metric("SLA", friendly_label(row.sla_status))
+    st.dataframe([exception_summary_record(row)], use_container_width=True, hide_index=True)
 
 
 def _render_detail_tabs(detail: ExceptionDetail) -> None:
@@ -495,7 +505,9 @@ def _selected_episode_id(read_service: OperationalReadService) -> uuid.UUID | No
         "Selected exception",
         queue_rows,
         index=_index_for_episode(queue_rows, current_id),
-        format_func=lambda row: f"{row.exception_reference} | {row.state} | {row.site_code} | {row.po_line}",
+        format_func=lambda row: (
+            f"{row.exception_reference} | {friendly_label(row.state)} | {row.site_code} | {row.po_line}"
+        ),
     )
     st.session_state["selected_episode_id"] = str(selected.episode_id)
     return selected.episode_id
@@ -516,14 +528,14 @@ def _queue_table(rows: Sequence[ExceptionQueueRow]) -> None:
             "supplier": row.supplier_name,
             "PO line": row.po_line,
             "product": row.product,
-            "state": row.state,
+            "state": friendly_label(row.state),
             "owner": row.owner or "Unassigned",
             "score": row.score,
-            "band": row.band,
+            "band": friendly_label(row.band) if row.band else None,
             "residual exposure": row.residual_value,
             "need date": row.need_date,
             "age": row.age_days,
-            "SLA status": row.sla_status,
+            "SLA status": friendly_label(row.sla_status),
         }
         for row in rows
     ]
@@ -538,7 +550,7 @@ def _candidate_table(rows: Sequence[CandidateRow]) -> None:
             "PO line": row.po_line,
             "product": row.product,
             "score": row.score,
-            "band": row.band,
+            "band": friendly_label(row.band),
             "residual exposure": row.residual_value,
             "need date": row.need_date,
         }
@@ -554,21 +566,102 @@ def _table_or_empty(records: Sequence[dict[str, object]], empty_message: str) ->
     st.dataframe(records, use_container_width=True, hide_index=True)
 
 
-def _pipeline_status(status: object) -> None:
+def _pipeline_status(status: PipelineStatus) -> None:
     st.subheader("Latest Successful Publication and Pipeline Status")
-    st.write(status)
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("Latest pipeline", friendly_label(status.latest_pipeline_status) or "No runs")
+    metric_columns[1].metric("Latest publication", friendly_label(status.latest_publication_status) or "No publication")
+    metric_columns[2].metric("Pipeline type", friendly_label(status.latest_pipeline_type) or "n/a")
+    st.dataframe([pipeline_status_record(status)], use_container_width=True, hide_index=True)
 
 
 def _run_command(command: Callable[[], object], success_message: str) -> None:
+    if _command_processing():
+        st.warning("A transaction is already processing.")
+        return
+    st.session_state[COMMAND_PROCESSING_KEY] = True
     try:
         command()
     except WorkflowError as exc:
         st.error(str(exc))
+        st.session_state[COMMAND_PROCESSING_KEY] = False
     except ValueError as exc:
         st.error(str(exc))
+        st.session_state[COMMAND_PROCESSING_KEY] = False
     else:
         st.success(success_message)
+        st.session_state[COMMAND_PROCESSING_KEY] = False
         st.rerun()
+
+
+def _action_button(
+    label: str,
+    *,
+    disabled: bool = False,
+    type: Literal["primary", "secondary", "tertiary"] = "secondary",
+) -> bool:
+    return st.button(label, disabled=disabled or _command_processing(), type=type)
+
+
+def _command_processing() -> bool:
+    return bool(st.session_state.get(COMMAND_PROCESSING_KEY, False))
+
+
+def assignment_owner_changed(current_owner_user_id: uuid.UUID | None, selected_owner_user_id: uuid.UUID) -> bool:
+    """Return whether an assignment command would change ownership."""
+
+    return current_owner_user_id != selected_owner_user_id
+
+
+def friendly_label(value: object | None) -> str:
+    """Return a recruiter-friendly label for governed codes."""
+
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if text == "":
+        return ""
+    return text.replace("_", " ").replace("-", " ").title()
+
+
+def _format_aud(value: Decimal | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"AUD {value:,.2f}"
+
+
+def _format_value(value: object | None) -> str:
+    return "n/a" if value is None else str(value)
+
+
+def exception_summary_record(row: ExceptionQueueRow) -> dict[str, object]:
+    """Return formatted exception summary fields for the detail page."""
+
+    return {
+        "Exception reference": row.exception_reference,
+        "Site": row.site_code,
+        "Supplier": row.supplier_name,
+        "PO line": row.po_line,
+        "Product": row.product,
+        "Residual quantity": _format_value(row.residual_quantity),
+        "Residual value": _format_aud(row.residual_value),
+        "Need date": _format_value(row.need_date),
+        "Age in days": row.age_days,
+    }
+
+
+def pipeline_status_record(status: PipelineStatus) -> dict[str, object]:
+    """Return formatted pipeline/publication status fields."""
+
+    return {
+        "Pipeline reference": _format_value(status.latest_pipeline_reference),
+        "Pipeline type": friendly_label(status.latest_pipeline_type) or "n/a",
+        "Pipeline status": friendly_label(status.latest_pipeline_status) or "n/a",
+        "Pipeline finished at": _format_value(status.latest_pipeline_finished_at),
+        "Publication reference": _format_value(status.latest_publication_reference),
+        "Publication status": friendly_label(status.latest_publication_status) or "n/a",
+        "Publication at": _format_value(status.latest_publication_at),
+    }
 
 
 def _open_candidate_command(
